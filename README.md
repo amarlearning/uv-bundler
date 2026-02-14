@@ -169,6 +169,19 @@ uv run uv-pack build \
 
 ---
 
+## 📦 Packaging Drivers
+- JAR driver assembles:
+  - Generated `__main__.py` bootstrap at the root.
+  - All staged dependencies under `site-packages/`.
+  - User sources preserved at package paths.
+  - `META-INF/MANIFEST.MF` included for JVM tooling.
+- Safety checks:
+  - For Linux targets, build fails if `.dylib`/`.dll` files exist in staging.
+
+This enables producing Spark-compatible JARs that remain Python-native.
+
+---
+
 ## 🗺 Roadmap
 
 1.  **Module config_loader**: Handles TOML parsing and hierarchy merging.
