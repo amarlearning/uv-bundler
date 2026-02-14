@@ -170,18 +170,22 @@ uv run uv-pack build \
 ---
 
 ## 📦 Packaging Drivers
-- JAR driver assembles:
-  - Generated `__main__.py` bootstrap at the root.
-  - All staged dependencies under `site-packages/`.
-  - User sources preserved at package paths.
-  - `META-INF/MANIFEST.MF` included for JVM tooling.
-- Safety checks:
-  - For Linux targets, build fails if `.dylib`/`.dll` files exist in staging.
+- JAR
+  - Injects generated `__main__.py` at root for runtime bootstrap.
+  - Packages dependencies under `site-packages/` and preserves user sources.
+  - Adds `META-INF/MANIFEST.MF` for JVM tooling compatibility.
+  - Linux safety: build fails if `.dylib`/`.dll` binaries are detected in staging.
+  - Ideal for Spark/Flink where a JAR container is required.
 
-This enables producing Spark-compatible JARs that remain Python-native.
+- ZIP
+  - Same internal layout as JAR (bootstrap + `site-packages/` + sources).
+  - Suited for AWS Lambda Layers and generic zip-based deployments.
+  - Deterministic assembly via Python’s `zipfile` with deflate compression.
 
-- ZIP driver produces a portable ZIP with the same structure, suitable for Lambda or generic deployments.
-- PEX driver builds an executable using the staged sources by invoking `pex` with the computed module entry point.
+- PEX
+  - Builds an executable .pex by invoking `pex` using the staged sources.
+  - Entry point derived from `module:function` (module passed to `-m`).
+  - Produces a single-file Python environment for schedulers (e.g., Airflow).
 
 ---
 
