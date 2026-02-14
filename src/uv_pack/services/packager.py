@@ -7,6 +7,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from uv_pack.domain.config import TargetConfig
 from uv_pack.services.bootstrap import render_bootstrap
+from uv_pack.services.resolver import Runner
 from uv_pack.services.staging import StagingPaths
 
 
@@ -60,3 +61,26 @@ def build_zip(paths: StagingPaths, entry_point: str, output: Path) -> PackageRes
         for fpath, arc in _iter_files(paths.sources):
             zf.write(fpath, arc.as_posix())
     return PackageResult(output=output)
+
+
+def build_pex_command(paths: StagingPaths, entry_point: str, output: Path) -> list[str]:
+    module, _func = entry_point.split(":", 1)
+    cmd = [
+        "pex",
+        "-D",
+        str(paths.sources),
+        "--sources-directory",
+        str(paths.sources),
+        "--include-tools",
+        "-m",
+        module,
+        "-o",
+        str(output),
+    ]
+    return cmd
+
+
+def build_pex(paths: StagingPaths, entry_point: str, output: Path, run: Runner) -> int:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    cmd = build_pex_command(paths, entry_point, output)
+    return int(run(cmd, cwd=paths.root))

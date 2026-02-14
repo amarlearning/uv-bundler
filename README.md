@@ -180,7 +180,8 @@ uv run uv-pack build \
 
 This enables producing Spark-compatible JARs that remain Python-native.
 
-Additionally, the ZIP driver produces a portable ZIP with the same structure, suitable for Lambda or generic deployments.
+- ZIP driver produces a portable ZIP with the same structure, suitable for Lambda or generic deployments.
+- PEX driver builds an executable using the staged sources by invoking `pex` with the computed module entry point.
 
 ---
 
