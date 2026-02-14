@@ -200,14 +200,12 @@ uv run uv-pack build \
 
 ## 🤝 Contributing
 
-We welcome contributions! If you've felt the pain of "it works on my machine but fails on the cluster," this tool is for you.
-
-1.  Fork the repo.
-2.  Create your feature branch.
-3.  Run pre-commit locally:
-    - pipx install pre-commit
-    - pre-commit install
-4.  Open a Pull Request.
+Quick guide:
+- Setup: `make setup` (requires `uv` on PATH).
+- Branch: `feature/<desc>` or `fix/<desc>`.
+- Commit: imperative mood, ≤ 50 chars for the summary.
+- Quality gate: `make fmt && make lint && make type && make test && make cov` (≥ 90% cov).
+- PR: include rationale; update docs if behavior changes.
 
 ## 📜 License
 
