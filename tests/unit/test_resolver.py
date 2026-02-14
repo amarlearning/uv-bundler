@@ -4,6 +4,17 @@ from uv_pack.domain.config import TargetConfig
 from uv_pack.services.resolver import build_compile_cmd, compile_lockfile
 
 
+class FakeRunner:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+        self.last_cwd: Path | None = None
+
+    def __call__(self, args: list[str], cwd: Path | None = None) -> int:
+        self.calls.append(list(args))
+        self.last_cwd = cwd
+        return 0
+
+
 def test_build_compile_cmd_linux() -> None:
     tgt = TargetConfig(
         format="jar",
@@ -23,12 +34,7 @@ def test_build_compile_cmd_linux() -> None:
 
 
 def test_compile_lockfile_invokes_runner(tmp_path: Path) -> None:
-    called = {}
-
-    def fake_run(args: list[str], cwd: Path | None = None) -> int:
-        called["args"] = args
-        called["cwd"] = cwd
-        return 0
+    runner = FakeRunner()
 
     tgt = TargetConfig(
         format="jar",
@@ -41,7 +47,7 @@ def test_compile_lockfile_invokes_runner(tmp_path: Path) -> None:
     py = tmp_path / "pyproject.toml"
     py.write_text("[project]\nname='x'\n")
     out = tmp_path / "resolved.lock"
-    code = compile_lockfile(py, tgt, out, fake_run, cwd=tmp_path)
+    code = compile_lockfile(py, tgt, out, runner, cwd=tmp_path)
     assert code == 0
-    assert called["cwd"] == tmp_path
-    assert called["args"][0] == "uv"
+    assert runner.last_cwd == tmp_path
+    assert runner.calls[0][0] == "uv"
