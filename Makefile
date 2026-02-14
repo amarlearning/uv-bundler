@@ -13,6 +13,7 @@ clean:
 	rm -rf .coverage
 	rm -rf .mypy_cache
 	rm -rf .pytest_cache
+	find . -type d -name "*.egg-info" -exec rm -rf {} +
 
 .PHONY: setup
 setup:

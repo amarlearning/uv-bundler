@@ -50,6 +50,3 @@ def build(
         return
 
     raise typer.Exit(code=1)
-
-    app()
-    app()
