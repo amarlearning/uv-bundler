@@ -7,15 +7,14 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,23 +22,25 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv
+        shell: bash
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Sync dependencies (uv)
-        env:
-          UV_PROJECT_ENVIRONMENT: .venv
+      - name: Sync environment
         run: |
-          uv sync --all-extras
+          make setup
 
       - name: Lint
         run: |
-          uv run ruff check .
-          uv run black --check .
+          make lint
 
-      - name: Type check
-        run: uv run mypy src
+      - name: Typecheck
+        run: |
+          make type
 
-      - name: Tests
-        run: uv run pytest -q --cov=uv_pack --cov-report=term-missing
+      - name: Tests (unit + integration)
+        env:
+          UV: uv
+        run: |
+          make cov
