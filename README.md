@@ -180,6 +180,8 @@ uv run uv-pack build \
 
 This enables producing Spark-compatible JARs that remain Python-native.
 
+Additionally, the ZIP driver produces a portable ZIP with the same structure, suitable for Lambda or generic deployments.
+
 ---
 
 ## 🗺 Roadmap

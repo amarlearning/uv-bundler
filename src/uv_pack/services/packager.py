@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Iterable
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from uv_pack.domain.config import TargetConfig
@@ -43,6 +43,17 @@ def build_jar(
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, mode="w", compression=ZIP_DEFLATED) as zf:
         _write_manifest(zf)
+        zf.writestr("__main__.py", render_bootstrap(entry_point))
+        for fpath, arc in _iter_files(paths.site_packages):
+            zf.write(fpath, f"site-packages/{arc.as_posix()}")
+        for fpath, arc in _iter_files(paths.sources):
+            zf.write(fpath, arc.as_posix())
+    return PackageResult(output=output)
+
+
+def build_zip(paths: StagingPaths, entry_point: str, output: Path) -> PackageResult:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with ZipFile(output, mode="w", compression=ZIP_DEFLATED) as zf:
         zf.writestr("__main__.py", render_bootstrap(entry_point))
         for fpath, arc in _iter_files(paths.site_packages):
             zf.write(fpath, f"site-packages/{arc.as_posix()}")
