@@ -102,18 +102,27 @@ extra_files = { "config/prod.yaml" = "resources/config.yaml" }
 
 ---
 
-## 🛠 Installation
+## 🛠 Installation (Dev)
 
 ```bash
 # Clone the repository
 git clone https://github.com/amarlearning/uv-pack.git
 cd uv-pack
 
-# Install in editable mode
-pip install -e .
+# Install uv (https://docs.astral.sh/uv/)
+brew install uv  # macOS (or see docs for other OS)
+
+# Sync (creates .venv and installs deps from pyproject + dev extras)
+UV_PROJECT_ENVIRONMENT=.venv uv sync --all-extras
+
+# Run quality checks
+uv run ruff check .
+uv run black --check .
+uv run mypy src
+uv run pytest -q
 ```
 
-> **Note:** Requires `uv` to be installed on your path.
+> Note: Requires `uv` on PATH. Prefer `uv run ...` for all dev commands.
 
 ---
 
@@ -123,21 +132,21 @@ pip install -e .
 Run the build using the `default_target` defined in `pyproject.toml`:
 
 ```bash
-uv-pack build
+uv run uv-pack build
 ```
 
 ### 2. Build a Specific Target
 Target a specific environment defined in your config (e.g., `[tool.uv-pack.targets.spark-prod]`):
 
 ```bash
-uv-pack build --target spark-prod
+uv run uv-pack build --target spark-prod
 ```
 
 ### 3. CLI Overrides
 Override configuration settings on the fly:
 
 ```bash
-uv-pack build \
+uv run uv-pack build \
   --target spark-prod \
   --arch aarch64 \
   --output ./dist/job-arm64.jar
@@ -175,7 +184,10 @@ We welcome contributions! If you've felt the pain of "it works on my machine but
 
 1.  Fork the repo.
 2.  Create your feature branch.
-3.  Open a Pull Request.
+3.  Run pre-commit locally:
+    - pipx install pre-commit
+    - pre-commit install
+4.  Open a Pull Request.
 
 ## 📜 License
 
