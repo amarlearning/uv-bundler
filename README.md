@@ -4,6 +4,52 @@
 
 `uv-pack` is a specialized build-orchestration tool designed to produce platform-agnostic, deployment-ready Python artifacts (JAR, PEX, ZIP) from any host OS. It leverages `uv` for high-speed, cross-platform dependency resolution and provides a "Standardized Build" contract for Data Engineering pipelines.
 
+## Workflow: From Local Dev to Cloud Prod
+
+```mermaid
+%%{init: { 'theme': 'neutral', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'ui-sans-serif, system-ui, sans-serif' } } }%%
+graph TD
+    %% Input Section
+    Host([Any Host Machine]) 
+    Config[pyproject.toml]
+
+    %% Engine Section (Logical Process)
+    subgraph Engine [uv-pack Core]
+        Resolve{Ghost Resolve}
+        Fetch[Fetch Target Wheels]
+        Stage[Staging & Flattening]
+        Boot(Inject Bootstrap)
+    end
+
+    %% Target/Architecture Section
+    Arch{Target Architecture}
+    X86[x86_64]
+    ARM[aarch64]
+
+    %% Final Artifacts
+    Jar[(Spark JAR)]
+    Pex[(Airflow PEX)]
+    Zip[(Lambda ZIP)]
+
+    %% Flow
+    Host --> Config
+    Config --> Resolve
+    Resolve --> Fetch
+    Fetch --> Stage
+    Stage --> Boot
+    Boot --> Arch
+    Arch --> X86
+    Arch --> ARM
+    X86 & ARM --> Jar & Pex & Zip
+
+    %% Simple, High-Contrast Styling
+    style Engine fill:#f8fafc,stroke:#334155,stroke-width:2px,stroke-dasharray: 5 5
+    style Host fill:#e2e8f0,stroke:#64748b
+    style Jar fill:#f1f5f9,stroke:#475569
+    style Pex fill:#f1f5f9,stroke:#475569
+    style Zip fill:#f1f5f9,stroke:#475569
+```
+
 ## 🚀 The Problem: "The Platform Tax"
 
 Enterprise data environments (Spark, Flink, AWS Lambda) often run on different architectures than developer laptops.
