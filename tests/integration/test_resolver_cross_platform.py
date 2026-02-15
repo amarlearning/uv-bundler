@@ -15,12 +15,14 @@ requires_uv = pytest.mark.skipif(not has_uv, reason="uv not found on PATH")
 def _write_min_pyproject(tmp: Path, extra_deps: list[str] | None = None) -> Path:
     deps = ['"packaging==24.2"'] + [f'"{d}"' for d in (extra_deps or [])]
     deps_str = ", ".join(deps)
-    pyproject = textwrap.dedent(f"""
+    pyproject = textwrap.dedent(
+        f"""
         [project]
         name = "it-sample"
         version = "0.0.0"
         dependencies = [{deps_str}]
-        """).strip()
+        """
+    ).strip()
     p = tmp / "pyproject.toml"
     p.write_text(pyproject)
     return p

@@ -84,7 +84,7 @@ sys.path.insert(0, site_packages)
 
 # 2. Entry Point Execution: Dynamically load the user's function
 # Translates "app.main:run" -> from app.main import run; run()
-module_str, func_str = "app.main", "run" 
+module_str, func_str = "app.main", "run"
 module = importlib.import_module(module_str)
 func = getattr(module, func_str)
 

@@ -12,7 +12,8 @@ def test_build_dry_run_with_minimal_project(tmp_path: Path, monkeypatch) -> None
     (tmp_path / "app" / "__init__.py").write_text("")
     (tmp_path / "app" / "main.py").write_text("def run():\n    return 'ok'\n")
 
-    pyproject = textwrap.dedent("""
+    pyproject = textwrap.dedent(
+        """
         [tool.uv-pack]
         default_target = "spark-prod"
 
@@ -23,7 +24,8 @@ def test_build_dry_run_with_minimal_project(tmp_path: Path, monkeypatch) -> None
         arch = "x86_64"
         python_version = "3.10"
         manylinux = "2014"
-        """).strip()
+        """
+    ).strip()
     (tmp_path / "pyproject.toml").write_text(pyproject)
     monkeypatch.chdir(tmp_path)
 
@@ -36,3 +38,30 @@ def test_build_dry_run_with_minimal_project(tmp_path: Path, monkeypatch) -> None
     assert "uv-pack dry run" in result.stdout
     assert "format: jar" in result.stdout
     assert "entry_point: app.main:run" in result.stdout
+
+
+def test_build_without_dry_run_exits_nonzero(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "main.py").write_text("def run():\n    return 'ok'\n")
+
+    pyproject = textwrap.dedent(
+        """
+        [tool.uv-pack]
+        default_target = "spark-prod"
+
+        [tool.uv-pack.targets.spark-prod]
+        format = "jar"
+        entry_point = "app.main:run"
+        platform = "linux"
+        arch = "x86_64"
+        python_version = "3.10"
+        manylinux = "2014"
+        """
+    ).strip()
+    (tmp_path / "pyproject.toml").write_text(pyproject)
+    monkeypatch.chdir(tmp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(app, [])
+    assert result.exit_code != 0

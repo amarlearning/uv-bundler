@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from uv_pack.domain.config import GlobalConfig, UvPackConfig, assert_module_path_exists
+from uv_pack.domain.config import (
+    GlobalConfig,
+    TargetConfig,
+    UvPackConfig,
+    assert_module_path_exists,
+)
 from uv_pack.services.config_loader import load_pyproject
 
 
@@ -20,15 +25,39 @@ def test_resolve_target_requires_default(tmp_path: Path) -> None:
 
 
 def test_invalid_entry_point_format_rejected(tmp_path: Path) -> None:
-    pyproject = textwrap.dedent("""
+    pyproject = textwrap.dedent(
+        """
         [tool.uv-pack]
         default_target = "t"
 
         [tool.uv-pack.targets.t]
         format = "jar"
         entry_point = "app.main"
-        """).strip()
+        """
+    ).strip()
     p = tmp_path / "pyproject.toml"
     p.write_text(pyproject)
     with pytest.raises(ValueError):
         _ = load_pyproject(p)
+
+
+def test_resolve_target_merges_config_and_targets() -> None:
+    global_cfg = GlobalConfig(default_target="spark-prod")
+    target = TargetConfig(
+        format="jar",
+        entry_point="app.main:run",
+        platform="linux",
+        arch="x86_64",
+        python_version="3.10",
+        manylinux="2014",
+        bundle="fat",
+        include_binaries=True,
+        compression="deflated",
+    )
+    cfg = UvPackConfig(global_config=global_cfg, targets={"spark-prod": target})
+    resolved = cfg.resolve_target(None)
+    assert resolved.entry_point == "app.main:run"
+    assert resolved.platform == "linux"
+    assert resolved.arch == "x86_64"
+    assert resolved.python_version == "3.10"
+    assert resolved.manylinux == "2014"

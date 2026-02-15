@@ -10,7 +10,7 @@
 %%{init: { 'theme': 'neutral', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'ui-sans-serif, system-ui, sans-serif' } } }%%
 graph TD
     %% Input Section
-    Host([Any Host Machine]) 
+    Host([Any Host Machine])
     Config[pyproject.toml]
 
     %% Engine Section (Logical Process)
@@ -128,35 +128,40 @@ uv run pytest -q
 
 ## 📖 Usage
 
-### 1. Build using Default Target
-Run the build using the `default_target` defined in `pyproject.toml`:
+### 1. Dry-run using the default target
+Validate the `default_target` defined in `pyproject.toml`:
 
 ```bash
-uv run uv-pack build
+uv run uv-pack --dry-run
 ```
 
-### 2. Build a Specific Target
-Target a specific environment defined in your config (e.g., `[tool.uv-pack.targets.spark-prod]`):
+### 2. Dry-run for a specific target
+Target a specific environment (e.g., `[tool.uv-pack.targets.spark-prod]`):
 
 ```bash
-uv run uv-pack build --target spark-prod
+uv run uv-pack --target spark-prod --dry-run
 ```
 
-### 3. CLI Overrides
-Override configuration settings on the fly:
+### 3. CLI Overrides (dry-run)
+Override resolution settings on the fly:
 
 ```bash
-uv run uv-pack build \
+uv run uv-pack \
   --target spark-prod \
+  --platform linux \
   --arch aarch64 \
-  --output ./dist/job-arm64.jar
+  --python-version 3.11 \
+  --manylinux 2014 \
+  --dry-run
 ```
 
 ---
 
 ## 🏗 How it Works: The Execution Lifecycle
 
-`uv-pack` follows a 5-step lifecycle to ensure deterministic builds:
+`uv-pack` follows a 5-step lifecycle to ensure deterministic builds.
+In the current implementation, Steps 1–4 are wired through services
+and the CLI dry-run; Step 5 is provided as packaging primitives.
 
 1.  **Context Hydration**: Reads `pyproject.toml` and merges it with CLI overrides. Validates entry points and maps platforms (e.g., `linux` + `x86_64` → `x86_64-unknown-linux-gnu`).
 2.  **The "Ghost" Resolution**: Invokes `uv` to resolve dependencies for the **target OS** (not your local OS). This ensures the lockfile contains the correct "Manylinux" wheel hashes.

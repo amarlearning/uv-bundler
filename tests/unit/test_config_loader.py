@@ -1,11 +1,14 @@
 import textwrap
 from pathlib import Path
 
+import pytest
+
 from uv_pack.services.config_loader import load_pyproject, merge_overrides
 
 
 def write_pyproject(tmp_path: Path) -> Path:
-    content = textwrap.dedent("""
+    content = textwrap.dedent(
+        """
         [tool.uv-pack]
         project_name = "demo"
         default_target = "spark-prod"
@@ -18,7 +21,8 @@ def write_pyproject(tmp_path: Path) -> Path:
         arch = "x86_64"
         python_version = "3.10"
         manylinux = "2014"
-        """).strip()
+        """
+    ).strip()
     path = tmp_path / "pyproject.toml"
     path.write_text(content)
     return path
@@ -45,3 +49,9 @@ def test_merge_overrides_is_immutable(tmp_path: Path) -> None:
     assert updated.platform == "linux"
     # original remains unchanged
     assert base.arch == "x86_64"
+
+
+def test_load_pyproject_missing_file_raises(tmp_path: Path) -> None:
+    missing = tmp_path / "does-not-exist.toml"
+    with pytest.raises(FileNotFoundError):
+        load_pyproject(missing)
