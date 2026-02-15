@@ -39,9 +39,17 @@ def test_build_jar_writes_structure(tmp_path: Path) -> None:
 
 def test_build_jar_detects_incompatible_binaries(tmp_path: Path) -> None:
     paths = make_staging(tmp_path)
-    # introduce a macOS dylib in site-packages
     (paths.site_packages / "libfoo.dylib").write_text("bin")
     target = TargetConfig(platform="linux", arch="x86_64")
     out = tmp_path / "out.jar"
     with pytest.raises(ValueError):
         build_jar(paths, "app.main:run", target, out)
+
+
+def test_build_jar_ignores_binaries_for_non_linux_targets(tmp_path: Path) -> None:
+    paths = make_staging(tmp_path)
+    (paths.site_packages / "libfoo.dylib").write_text("bin")
+    target = TargetConfig(platform="macos", arch="x86_64")
+    out = tmp_path / "out.jar"
+    res = build_jar(paths, "app.main:run", target, out)
+    assert res.output == out

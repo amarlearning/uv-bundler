@@ -63,6 +63,10 @@ test: ensure-sync
 cov: ensure-sync
 	UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) run pytest -q --cov=uv_pack --cov-report=term-missing
 
+.PHONY: bench
+bench: ensure-sync
+	UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) run pytest -q tests/benchmarks -k bench
+
 .PHONY: pre-commit
 pre-commit: ensure-sync
 	UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) run pre-commit run --all-files

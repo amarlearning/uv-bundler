@@ -61,3 +61,14 @@ def test_resolve_target_merges_config_and_targets() -> None:
     assert resolved.arch == "x86_64"
     assert resolved.python_version == "3.10"
     assert resolved.manylinux == "2014"
+
+
+def test_resolve_target_missing_named_target_raises() -> None:
+    global_cfg = GlobalConfig(default_target="spark-prod")
+    cfg = UvPackConfig(global_config=global_cfg, targets={})
+    with pytest.raises(KeyError):
+        cfg.resolve_target("spark-prod")
+
+
+def test_assert_module_path_exists_allows_missing_entry_point(tmp_path: Path) -> None:
+    assert_module_path_exists(tmp_path, None)

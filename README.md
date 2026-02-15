@@ -116,10 +116,12 @@ brew install uv  # macOS (or see docs for other OS)
 UV_PROJECT_ENVIRONMENT=.venv uv sync --all-extras
 
 # Run quality checks
-uv run ruff check .
-uv run black --check .
-uv run mypy src
-uv run pytest -q
+make fmt
+make lint
+make type
+make test
+make cov
+make bench
 ```
 
 > Note: Requires `uv` on PATH. Prefer `uv run ...` for all dev commands.

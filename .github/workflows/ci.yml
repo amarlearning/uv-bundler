@@ -45,6 +45,12 @@ jobs:
         run: |
           UV_PROJECT_ENVIRONMENT=.venv uv run pytest -q tests/unit
 
+      - name: Benchmarks
+        env:
+          UV: uv
+        run: |
+          UV_PROJECT_ENVIRONMENT=.venv uv run pytest -q tests/benchmarks -k bench
+
   integration:
     runs-on: ubuntu-latest
     needs: unit
