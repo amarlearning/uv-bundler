@@ -216,3 +216,5 @@ docs/IMPLEMENTATION_PLAN.md
 # Validation
 .hypothesis
 .venv_validation/
+.venv_*
+Validation/

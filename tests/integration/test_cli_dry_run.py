@@ -40,7 +40,7 @@ def test_build_dry_run_with_minimal_project(tmp_path: Path, monkeypatch) -> None
     assert "entry_point: app.main:run" in result.stdout
 
 
-def test_build_without_dry_run_exits_nonzero(tmp_path: Path, monkeypatch) -> None:
+def test_build_without_dry_run_builds_artifact(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("")
     (tmp_path / "app" / "main.py").write_text("def run():\n    return 'ok'\n")
@@ -64,4 +64,7 @@ def test_build_without_dry_run_exits_nonzero(tmp_path: Path, monkeypatch) -> Non
 
     runner = CliRunner()
     result = runner.invoke(app, [])
-    assert result.exit_code != 0
+    assert result.exit_code == 0
+    dist_dir = tmp_path / "dist"
+    assert dist_dir.exists()
+    assert any(p.name == "app-linux-x86_64.jar" for p in dist_dir.iterdir())

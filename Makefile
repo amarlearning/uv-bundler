@@ -17,6 +17,7 @@ clean:
 	rm -rf .hypothesis
 	rm -rf .venv_validation/
 	rm -rf dist/
+	rm -rf .venv_*
 
 .PHONY: setup
 setup:
