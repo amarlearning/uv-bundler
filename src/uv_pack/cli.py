@@ -23,7 +23,7 @@ def build(
 ) -> None:
     """
     Build artifacts for a target defined in pyproject.toml.
-    In Phase 1, this command validates configuration and supports dry-run only.
+    Validates configuration and supports dry-run inspection of the build plan.
     """
     pyproject = Path("pyproject.toml").resolve()
     cfg = load_pyproject(pyproject)
@@ -40,13 +40,12 @@ def build(
     assert_module_path_exists(Path.cwd(), tgt.entry_point)
 
     if dry_run:
-        typer.echo("uv-pack dry run (Phase 1 skeleton)")
+        typer.echo("uv-pack dry run")
         typer.echo(f"- target: {target or cfg.global_config.default_target}")
         typer.echo(f"- format: {tgt.format}")
         typer.echo(f"- entry_point: {tgt.entry_point}")
         typer.echo(f"- platform: {tgt.platform}, arch: {tgt.arch}")
         typer.echo(f"- python: {tgt.python_version}, manylinux: {tgt.manylinux}")
-        typer.echo("- no build executed (use future Phase 2+ for actual packaging)")
         return
 
     raise typer.Exit(code=1)

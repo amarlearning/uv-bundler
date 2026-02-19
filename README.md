@@ -161,9 +161,7 @@ uv run uv-pack \
 
 ## 🏗 How it Works: The Execution Lifecycle
 
-`uv-pack` follows a 5-step lifecycle to ensure deterministic builds.
-In the current implementation, Steps 1–4 are wired through services
-and the CLI dry-run; Step 5 is provided as packaging primitives.
+`uv-pack` follows a 5-step lifecycle to ensure deterministic builds:
 
 1.  **Context Hydration**: Reads `pyproject.toml` and merges it with CLI overrides. Validates entry points and maps platforms (e.g., `linux` + `x86_64` → `x86_64-unknown-linux-gnu`).
 2.  **The "Ghost" Resolution**: Invokes `uv` to resolve dependencies for the **target OS** (not your local OS). This ensures the lockfile contains the correct "Manylinux" wheel hashes.
@@ -196,12 +194,12 @@ and the CLI dry-run; Step 5 is provided as packaging primitives.
 
 ---
 
-## 🗺 Roadmap
+## 🧩 Core Modules
 
-1.  **Module config_loader**: Handles TOML parsing and hierarchy merging.
-2.  **Module resolver**: Interfaces with `uv` to generate the platform-specific lockfile.
-3.  **Module packager**: Base class with specialized `JarPackager`, `PexPackager`, and `ZipPackager` implementations.
-4.  **CLI Entrypoint**: Built with `click` or `typer` to provide a clean user interface.
+1.  **Configuration loader (`config_loader`)**: Handles TOML parsing and hierarchy merging.
+2.  **Resolver (`resolver`)**: Interfaces with `uv` to generate the platform-specific lockfile.
+3.  **Packaging drivers (`packager`)**: Implement JAR, PEX, and ZIP assembly logic.
+4.  **CLI Entrypoint (`uv_pack.cli`)**: Provides a Typer-based command-line interface.
 
 ---
 

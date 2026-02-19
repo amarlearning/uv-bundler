@@ -212,3 +212,7 @@ __marimo__/
 # Docs
 docs/IMPLEMENTATION_PLAN.md
 .trae/
+
+# Validation
+.hypothesis
+.venv_validation/

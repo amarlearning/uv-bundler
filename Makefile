@@ -14,6 +14,9 @@ clean:
 	rm -rf .mypy_cache
 	rm -rf .pytest_cache
 	find . -type d -name "*.egg-info" -exec rm -rf {} +
+	rm -rf .hypothesis
+	rm -rf .venv_validation/
+	rm -rf dist/
 
 .PHONY: setup
 setup:
