@@ -1,0 +1,267 @@
+name: CI - Build & Validate Artifacts
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ "*" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        shell: bash
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build uv-pack wheel
+        env:
+          UV: uv
+        run: |
+          UV_PROJECT_ENVIRONMENT=.venv uv build
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uv-pack-wheel
+          path: dist/uv_pack-*-py3-none-any.whl
+
+  build-artifacts-linux:
+    needs: build-wheel
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ["aarch64"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log build host architecture
+        run: |
+          echo "Build host kernel: $(uname -s)"
+          echo "Build host arch:   $(uname -m)"
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: uv-pack-wheel
+          path: dist
+
+      - name: Build Linux base image (host x86_64, target Linux)
+        run: |
+          make -C validation docker-base-linux
+
+      - name: Build builder image
+        run: |
+          cd validation
+          mkdir -p out
+          docker build -f docker/Dockerfile.linux.builder -t uv-pack:builder-linux ..
+
+      - name: Build single-spark-job artifacts (JAR/ZIP/PEX) for target linux/${{ matrix.arch }}
+        run: |
+          cd validation
+          mkdir -p out
+          docker run --rm \
+            -v "$(pwd)/out:/workspace/out" \
+            uv-pack:builder-linux \
+            --platform linux --arch ${{ matrix.arch }} -t spark-jar
+
+          docker run --rm \
+            -v "$(pwd)/out:/workspace/out" \
+            uv-pack:builder-linux \
+            --platform linux --arch ${{ matrix.arch }} -t spark-zip
+
+          docker run --rm \
+            -v "$(pwd)/out:/workspace/out" \
+            uv-pack:builder-linux \
+            --platform linux --arch ${{ matrix.arch }} -t spark-pex
+
+      - name: Upload Linux artifacts for ${{ matrix.arch }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-spark-job-linux-${{ matrix.arch }}
+          path: |
+            validation/out/single-spark-job/single-spark-job-linux-${{ matrix.arch }}.jar
+            validation/out/single-spark-job/single-spark-job-linux-${{ matrix.arch }}.zip
+            validation/out/single-spark-job/single-spark-job-linux-${{ matrix.arch }}.pex
+
+  build-artifacts-linux-from-arm:
+    needs: build-wheel
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log build host architecture (arm64 builder)
+        run: |
+          echo "Build host kernel: $(uname -s)"
+          echo "Build host arch:   $(uname -m)"
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: uv-pack-wheel
+          path: dist
+
+      - name: Build Linux base image on arm64 (target Linux)
+        run: |
+          make -C validation docker-base-linux
+
+      - name: Build builder image on arm64
+        run: |
+          cd validation
+          mkdir -p out
+          docker build -f docker/Dockerfile.linux.builder -t uv-pack:builder-linux ..
+
+      - name: Build single-spark-job artifacts (JAR/ZIP/PEX) for target linux/x86_64
+        run: |
+          cd validation
+          mkdir -p out
+          docker run --rm \
+            -v "$(pwd)/out:/workspace/out" \
+            uv-pack:builder-linux \
+            --platform linux --arch x86_64 -t spark-jar
+
+          docker run --rm \
+            -v "$(pwd)/out:/workspace/out" \
+            uv-pack:builder-linux \
+            --platform linux --arch x86_64 -t spark-zip
+
+          docker run --rm \
+            -v "$(pwd)/out:/workspace/out" \
+            uv-pack:builder-linux \
+            --platform linux --arch x86_64 -t spark-pex
+
+      - name: Upload Linux artifacts for x86_64 (built on arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-spark-job-linux-x86_64-from-arm
+          path: |
+            validation/out/single-spark-job/single-spark-job-linux-x86_64.jar
+            validation/out/single-spark-job/single-spark-job-linux-x86_64.zip
+            validation/out/single-spark-job/single-spark-job-linux-x86_64.pex
+
+  validate-artifacts-linux-aarch64:
+    needs: build-artifacts-linux
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log validate host architecture (linux/aarch64)
+        run: |
+          echo "Validate host kernel: $(uname -s)"
+          echo "Validate host arch:   $(uname -m)"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download linux-aarch64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: single-spark-job-linux-aarch64
+          path: validation/out/single-spark-job
+
+      - name: Validate linux-aarch64 artifacts
+        run: |
+          python validation/validate_artifacts.py \
+            --out-dir validation/out/single-spark-job \
+            --target-os linux \
+            --target-arch aarch64
+
+      - name: Summarize linux-aarch64 validation
+        run: |
+          echo ""
+          echo "Artifact validation summary (linux/aarch64):"
+          echo ""
+          echo "| Artifact type | Built on (runner / arch) | Built for (os / arch) | Tested on (runner / arch) | Status |"
+          echo "|--------------|--------------------------|------------------------|---------------------------|--------|"
+          echo "| JAR          | ubuntu-latest / x86_64   | linux / aarch64        | ubuntu-24.04-arm / arm64  | passed |"
+          echo "| ZIP          | ubuntu-latest / x86_64   | linux / aarch64        | ubuntu-24.04-arm / arm64  | passed |"
+          echo "| PEX          | ubuntu-latest / x86_64   | linux / aarch64        | ubuntu-24.04-arm / arm64  | passed |"
+
+  validate-artifacts-linux-x86_64:
+    needs: build-artifacts-linux-from-arm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log validate host architecture (linux/x86_64 from arm64 build)
+        run: |
+          echo "Validate host kernel: $(uname -s)"
+          echo "Validate host arch:   $(uname -m)"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download linux-x86_64 artifacts built on arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: single-spark-job-linux-x86_64-from-arm
+          path: validation/out/single-spark-job
+
+      - name: Validate linux-x86_64 artifacts (built on arm64)
+        run: |
+          python validation/validate_artifacts.py \
+            --out-dir validation/out/single-spark-job \
+            --target-os linux \
+            --target-arch x86_64
+
+      - name: Summarize linux-x86_64 validation (built on arm64)
+        run: |
+          echo ""
+          echo "Artifact validation summary (linux/x86_64, built on arm64):"
+          echo ""
+          echo "| Artifact type | Built on (runner / arch)    | Built for (os / arch) | Tested on (runner / arch) | Status |"
+          echo "|--------------|-----------------------------|------------------------|---------------------------|--------|"
+          echo "| JAR          | ubuntu-24.04-arm / arm64    | linux / x86_64         | ubuntu-latest / x86_64    | passed |"
+          echo "| ZIP          | ubuntu-24.04-arm / arm64    | linux / x86_64         | ubuntu-latest / x86_64    | passed |"
+          echo "| PEX          | ubuntu-24.04-arm / arm64    | linux / x86_64         | ubuntu-latest / x86_64    | passed |"
+
+  build-artifacts-windows:
+    needs: build-wheel
+    runs-on: windows-latest
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "Windows artifact build to be implemented on native runner."
+
+  validate-artifacts-windows:
+    needs: build-artifacts-windows
+    runs-on: windows-latest
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "Windows artifact validation to be implemented on native runner."
+
+  build-artifacts-macos:
+    needs: build-wheel
+    runs-on: macos-latest
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "macOS artifact build to be implemented on native runner."
+
+  validate-artifacts-macos:
+    needs: build-artifacts-macos
+    runs-on: macos-latest
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "macOS artifact validation to be implemented on native runner."

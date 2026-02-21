@@ -1,0 +1,36 @@
+[project]
+name = "single-spark-job"
+version = "0.1.0"
+description = "Single Spark job example for uv-pack"
+requires-python = ">=3.10"
+dependencies = [
+  "pyspark>=3.5",
+]
+
+[tool.uv-pack]
+project_name = "single-spark-job"
+default_target = "spark-jar"
+output_base = "./dist"
+
+[tool.uv-pack.targets.spark-jar]
+format = "jar"
+entry_point = "app.main:run"
+platform = "linux"
+arch = "x86_64"
+python_version = "3.10"
+manylinux = "2014"
+bundle = "fat"
+include_binaries = true
+compression = "deflated"
+
+[tool.uv-pack.targets.spark-zip]
+format = "zip"
+entry_point = "app.main:run"
+platform = "linux"
+arch = "x86_64"
+
+[tool.uv-pack.targets.spark-pex]
+format = "pex"
+entry_point = "app.main:run"
+platform = "linux"
+arch = "x86_64"

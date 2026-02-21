@@ -1,0 +1,29 @@
+FROM python:3.12-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && rm -rf /var/lib/apt/lists/*
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && ln -s /root/.local/bin/uv /usr/local/bin/uv
+
+WORKDIR /opt/uv-pack
+
+COPY dist/uv_pack-*-py3-none-any.whl ./dist/
+
+RUN pip install dist/uv_pack-*-py3-none-any.whl pex
+
+FROM python:3.12-slim AS runtime
+
+ENV PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /root/.local /root/.local
+
+ENV PATH="/root/.local/bin:${PATH}"
+
+WORKDIR /workspace
+
+ENTRYPOINT ["uv-pack"]
+CMD ["--help"]

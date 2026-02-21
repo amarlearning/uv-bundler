@@ -1,0 +1,35 @@
+[project]
+name = "multi-module-spark-jobs"
+version = "0.1.0"
+description = "Multi-module Spark jobs example for uv-pack"
+requires-python = ">=3.10"
+dependencies = [
+  "pyspark>=3.5",
+]
+
+[tool.uv-pack]
+project_name = "multi-module-spark-jobs"
+default_target = "spark-prod"
+output_base = "./dist"
+
+[tool.uv-pack.targets.spark-prod]
+format = "jar"
+entry_point = "jobs.daily_sales:run"
+platform = "linux"
+arch = "x86_64"
+python_version = "3.10"
+manylinux = "2014"
+bundle = "fat"
+include_binaries = true
+compression = "deflated"
+
+[tool.uv-pack.targets.spark-dev]
+format = "jar"
+entry_point = "jobs.hourly_metrics:run"
+platform = "linux"
+arch = "aarch64"
+python_version = "3.11"
+manylinux = "2014"
+bundle = "fat"
+include_binaries = true
+compression = "deflated"

@@ -217,4 +217,5 @@ docs/IMPLEMENTATION_PLAN.md
 .hypothesis
 .venv_validation/
 .venv_*
-Validation/
+validation/out/
+Validation/VALIDATION_PLAN.md
