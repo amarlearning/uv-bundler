@@ -94,13 +94,11 @@ def validate_runtime(base: Path, target_os: str, target_arch: str) -> list[str]:
             errors.append("runtime: jar output did not contain expected log line")
 
     if pex.exists():
-        # TODO: Fix PEX dependency inclusion in uv-pack; currently PEX is built without deps.
-        # code, out, err = run_command(["python", str(pex)])
-        # if code != 0:
-        #     errors.append(f"runtime: pex exited with {code}: {err or out}")
-        # elif EXPECTED_LOG_SUBSTRING not in out:
-        #     errors.append("runtime: pex output did not contain expected log line")
-        pass
+        code, out, err = run_command(["python", str(pex)])
+        if code != 0:
+            errors.append(f"runtime: pex exited with {code}: {err or out}")
+        elif EXPECTED_LOG_SUBSTRING not in out:
+            errors.append("runtime: pex output did not contain expected log line")
 
     if zip_app.exists():
         code, out, err = run_command(["python", str(zip_app)])

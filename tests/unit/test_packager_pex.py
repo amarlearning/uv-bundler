@@ -23,9 +23,9 @@ def test_build_pex_command_uses_module_and_output(tmp_path: Path) -> None:
     cmd = build_pex_command(paths, "app.main:run", out)
     assert "pex" == cmd[0]
     # ensure module appears
-    assert "-m" in cmd
-    m_index = cmd.index("-m")
-    assert cmd[m_index + 1] == "app.main"
+    assert "-e" in cmd
+    m_index = cmd.index("-e")
+    assert cmd[m_index + 1] == "app.main:run"
     # ensure output flag and path
     assert "-o" in cmd
     o_index = cmd.index("-o")

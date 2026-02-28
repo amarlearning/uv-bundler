@@ -34,3 +34,33 @@ def compile_lockfile(
 ) -> int:
     cmd = build_compile_cmd(pyproject, target, lock_path)
     return run(cmd, cwd=cwd)
+
+
+def build_install_cmd(lock_path: Path, target: TargetConfig, site_packages: Path) -> list[str]:
+    if not target.platform or not target.arch or not target.python_version:
+        raise ValueError("target requires platform, arch, and python_version")
+    platform = pep508_platform(target.platform, target.arch)
+    return [
+        "uv",
+        "pip",
+        "install",
+        "-r",
+        str(lock_path),
+        "--target",
+        str(site_packages),
+        "--python-platform",
+        platform,
+        "--python-version",
+        str(target.python_version),
+    ]
+
+
+def install_dependencies(
+    lock_path: Path,
+    target: TargetConfig,
+    site_packages: Path,
+    run: Runner,
+    cwd: Path | None = None,
+) -> int:
+    cmd = build_install_cmd(lock_path, target, site_packages)
+    return run(cmd, cwd=cwd)

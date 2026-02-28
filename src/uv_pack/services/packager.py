@@ -56,6 +56,9 @@ def build_zip(paths: StagingPaths, entry_point: str, output: Path) -> PackageRes
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, mode="w", compression=ZIP_DEFLATED) as zf:
         zf.writestr("__main__.py", render_bootstrap(entry_point))
+        # Add site-packages to root of zip to make it importable
+        # However, to avoid conflicts, we keep it in site-packages/
+        # and rely on bootstrap.py to add it to sys.path
         for fpath, arc in _iter_files(paths.site_packages):
             zf.write(fpath, f"site-packages/{arc.as_posix()}")
         for fpath, arc in _iter_files(paths.sources):
@@ -64,16 +67,18 @@ def build_zip(paths: StagingPaths, entry_point: str, output: Path) -> PackageRes
 
 
 def build_pex_command(paths: StagingPaths, entry_point: str, output: Path) -> list[str]:
-    module, _func = entry_point.split(":", 1)
+    # PEX command needs both sources and site-packages (dependencies)
     cmd = [
         "pex",
         "-D",
         str(paths.sources),
+        "-D",
+        str(paths.site_packages),
         "--sources-directory",
         str(paths.sources),
         "--include-tools",
-        "-m",
-        module,
+        "-e",
+        entry_point,
         "-o",
         str(output),
     ]

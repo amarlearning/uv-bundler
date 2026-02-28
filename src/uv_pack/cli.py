@@ -14,7 +14,8 @@ from uv_pack.domain.config import (
 )
 from uv_pack.services.config_loader import load_pyproject, merge_overrides
 from uv_pack.services.packager import build_jar, build_pex, build_zip
-from uv_pack.services.staging import make_staging_paths
+from uv_pack.services.resolver import compile_lockfile, install_dependencies
+from uv_pack.services.staging import StagingPaths, make_staging_paths
 
 app = typer.Typer(help="uv-pack: Universal cross-platform Python packager powered by uv")
 
@@ -53,6 +54,26 @@ def _artifact_path(out_root: Path, cfg: UvPackConfig, tgt: TargetConfig, suffix:
     arch = tgt.arch or "unknown-arch"
     name = f"{base_name}-{str(platform).lower()}-{str(arch).lower()}{suffix}"
     return out_root / name
+
+
+def _resolve_and_install(
+    pyproject: Path, tgt: TargetConfig, paths: StagingPaths, staging_base: Path
+) -> None:
+    # Resolve and install dependencies
+    staging_base.mkdir(exist_ok=True)
+    lock_file = staging_base / "resolved.lock"
+    typer.echo(f"Resolving dependencies for {tgt.platform}/{tgt.arch}...")
+    if compile_lockfile(pyproject, tgt, lock_file, process_run, cwd=pyproject.parent) != 0:
+        typer.echo("Failed to resolve dependencies")
+        raise typer.Exit(code=1)
+
+    typer.echo("Installing dependencies into staging...")
+    if (
+        install_dependencies(lock_file, tgt, paths.site_packages, process_run, cwd=pyproject.parent)
+        != 0
+    ):
+        typer.echo("Failed to install dependencies")
+        raise typer.Exit(code=1)
 
 
 @app.command("build")
@@ -99,8 +120,11 @@ def build(
     paths = make_staging_paths(staging_base)
     clean_staging(paths)
     create_staging(paths)
-    _stage_sources(pyproject.parent, paths.sources)
+
     try:
+        _stage_sources(pyproject.parent, paths.sources)
+        _resolve_and_install(pyproject, tgt, paths, staging_base)
+
         out_root = _output_root(pyproject, cfg)
         if tgt.format == "jar":
             output = _artifact_path(out_root, cfg, tgt, ".jar")
