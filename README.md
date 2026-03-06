@@ -4,6 +4,37 @@
 
 `uv-pack` is a specialized build-orchestration tool designed to produce platform-agnostic, deployment-ready Python artifacts (JAR, PEX, ZIP) from any host OS. It leverages `uv` for high-speed, cross-platform dependency resolution and provides a "Standardized Build" contract for Data Engineering pipelines.
 
+## Quick Start
+
+Add a target to your `pyproject.toml`:
+
+```toml
+[tool.uv-pack]
+project_name = "my-spark-job"
+default_target = "spark-linux"
+
+[tool.uv-pack.targets.spark-linux]
+format = "jar"
+entry_point = "app.main:run"
+platform = "linux"
+arch = "x86_64"
+python_version = "3.10"
+manylinux = "2014"
+```
+
+Then build from any machine (macOS, Windows, Linux):
+
+```bash
+$ uv-pack
+Resolving dependencies for linux/x86_64...
+Installing dependencies into staging...
+/path/to/dist/my-spark-job-linux-x86_64.jar
+```
+
+That's it — a single self-contained JAR with your source code and all dependencies bundled for Linux, built from your local machine. No Docker required.
+
+---
+
 ## Workflow: From Local Dev to Cloud Prod
 
 ```mermaid
@@ -88,11 +119,9 @@ entry_point = "app.main:run"    # Callable string: module.submodule:function
 platform = "linux"              # Options: "linux", "macos", "windows"
 arch = "x86_64"                 # Options: "x86_64", "aarch64" (ARM)
 python_version = "3.10"         # Specific Python version for the target
-manylinux = "2014"              # glibc version (Options: "2010", "2014", "31")
+manylinux = "2014"              # glibc version (Options: "2010", "2014", or numeric e.g. "31")
 
-# --- Packaging Strategy ---
-bundle = "fat"                  # "fat" (deps included), "slim" (source only)
-include_binaries = true         # Whether to include compiled .so files
+# --- Packaging Options ---
 compression = "deflated"        # Options: "stored", "deflated"
 
 # --- Advanced Options ---
@@ -134,28 +163,34 @@ make bench
 Validate the `default_target` defined in `pyproject.toml`:
 
 ```bash
-uv run uv-pack --dry-run
+uv-pack --dry-run
 ```
 
-### 2. Dry-run for a specific target
+### 2. Build a specific target
 Target a specific environment (e.g., `[tool.uv-pack.targets.spark-prod]`):
 
 ```bash
-uv run uv-pack --target spark-prod --dry-run
+uv-pack --target spark-prod
 ```
 
-### 3. CLI Overrides (dry-run)
-Override resolution settings on the fly:
+### 3. CLI Overrides
+Override resolution settings on the fly without editing `pyproject.toml`:
 
 ```bash
-uv run uv-pack \
+uv-pack \
   --target spark-prod \
   --platform linux \
   --arch aarch64 \
   --python-version 3.11 \
-  --manylinux 2014 \
-  --dry-run
+  --manylinux 2014
 ```
+
+### 4. Dry-run with overrides
+```bash
+uv-pack --target spark-prod --platform linux --arch aarch64 --dry-run
+```
+
+> **Note:** Use `uv run uv-pack` if you haven't installed the package globally (e.g. in a fresh `uv sync` environment).
 
 ---
 
@@ -164,7 +199,7 @@ uv run uv-pack \
 `uv-pack` follows a 5-step lifecycle to ensure deterministic builds:
 
 1.  **Context Hydration**: Reads `pyproject.toml` and merges it with CLI overrides. Validates entry points and maps platforms (e.g., `linux` + `x86_64` → `x86_64-unknown-linux-gnu`).
-2.  **The "Ghost" Resolution**: Invokes `uv` to resolve dependencies for the **target OS** (not your local OS). This ensures the lockfile contains the correct "Manylinux" wheel hashes.
+2.  **The "Ghost" Resolution**: Invokes `uv pip compile` for the **target OS** (not your local OS). With `manylinux = "2014"` this resolves against `x86_64-manylinux2014`, ensuring the lockfile pins the correct glibc-compatible wheel hashes.
 3.  **Staging & Wheel Extraction**: Downloads and unpacks the specific platform-compatible Wheels into a staging area, injecting your source code.
 4.  **Bootstrap Generation**: Generates a `__main__.py` bootstrap script to handle path injection and dynamic entry point execution at runtime.
 5.  **Final Assembly**: Bundles the artifacts into the requested format:
@@ -188,9 +223,11 @@ uv run uv-pack \
   - Deterministic assembly via Python’s `zipfile` with deflate compression.
 
 - PEX
-  - Builds an executable .pex by invoking `pex` using the staged sources.
-  - Entry point derived from `module:function` (module passed to `-m`).
+  - Builds an executable `.pex` by invoking `pex` with the resolved lockfile and staged sources.
+  - Entry point derived from `module:function` notation.
+  - Uses `--platform <tag>` (e.g. `manylinux2014_x86_64-cp-310-cp310`) for cross-platform resolution.
   - Produces a single-file Python environment for schedulers (e.g., Airflow).
+  - **First build downloads packages from PyPI** (pex manages its own wheel cache). Subsequent builds are fast. In CI, cache `$PEX_ROOT` (default `~/.pex`) between runs.
 
 ---
 
@@ -209,7 +246,7 @@ Quick guide:
 - Setup: `make setup` (requires `uv` on PATH).
 - Branch: `feature/<desc>` or `fix/<desc>`.
 - Commit: imperative mood, ≤ 50 chars for the summary.
-- Quality gate: `make fmt && make lint && make type && make test && make cov` (≥ 90% cov).
+- Quality gate: `make fmt && make lint && make type && make test`.
 - PR: include rationale; update docs if behavior changes.
 
 ## 📜 License
