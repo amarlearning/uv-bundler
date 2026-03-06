@@ -31,6 +31,10 @@ setup:
 lock:
 	$(UV) lock
 
+.PHONY: build
+build: ensure-uv
+	$(UV) build
+
 .PHONY: ensure-uv
 ensure-uv:
 	@if ! command -v $(UV) >/dev/null 2>&1; then \

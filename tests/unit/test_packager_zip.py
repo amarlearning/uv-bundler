@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from zipfile import ZipFile
 
+from uv_pack.domain.config import TargetConfig
 from uv_pack.services.packager import build_zip
 from uv_pack.services.staging import StagingPaths
 
@@ -22,7 +23,7 @@ def make_staging(tmp_path: Path) -> StagingPaths:
 def test_build_zip_writes_structure(tmp_path: Path) -> None:
     paths = make_staging(tmp_path)
     out = tmp_path / "out.zip"
-    res = build_zip(paths, "app.main:run", out)
+    res = build_zip(paths, "app.main:run", TargetConfig(), out)
     assert res.output == out
     with ZipFile(out) as zf:
         names = set(zf.namelist())

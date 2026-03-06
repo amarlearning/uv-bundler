@@ -27,7 +27,7 @@ def test_build_compile_cmd_linux() -> None:
     cmd = build_compile_cmd(Path("pyproject.toml"), tgt, Path(".uv-pack/resolved.lock"))
     assert cmd[:3] == ["uv", "pip", "compile"]
     assert "--python-platform" in cmd
-    assert "x86_64-unknown-linux-gnu" in cmd
+    assert "x86_64-manylinux2014" in cmd
     assert "--python-version" in cmd
     assert "3.10" in cmd
     assert "--output-file" in cmd

@@ -47,6 +47,11 @@ def test_build_without_dry_run_builds_artifact(tmp_path: Path, monkeypatch) -> N
 
     pyproject = textwrap.dedent(
         """
+        [project]
+        name = "test-app"
+        version = "0.1.0"
+        dependencies = []
+
         [tool.uv-pack]
         default_target = "spark-prod"
 

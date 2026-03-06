@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import os
 from pathlib import Path
 
@@ -20,16 +21,56 @@ from uv_pack.services.staging import StagingPaths, make_staging_paths
 app = typer.Typer(help="uv-pack: Universal cross-platform Python packager powered by uv")
 
 
-def _stage_sources(project_root: Path, dest: Path) -> None:
-    skip = {".uv-pack", ".venv", ".venv_validation", "dist", "out", "__pycache__"}
+# Root-level files that are always build/project metadata, never runtime sources.
+_ROOT_META_FILES = frozenset(
+    {
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg",
+        "uv.lock",
+        "poetry.lock",
+        "requirements.txt",
+        "requirements-dev.txt",
+        "Makefile",
+        "MANIFEST.in",
+        "tox.ini",
+        ".pre-commit-config.yaml",
+    }
+)
+_ROOT_META_EXTS = frozenset({".md", ".rst", ".txt", ".cfg", ".ini", ".toml"})
+
+
+def _is_excluded(rel_posix: str, patterns: list[str]) -> bool:
+    """Return True if *rel_posix* matches any of the glob *patterns*."""
+    return any(fnmatch.fnmatch(rel_posix, pat) for pat in patterns)
+
+
+def _stage_sources(project_root: Path, dest: Path, exclude: list[str] | None = None) -> None:
+    skip_dirs = {".uv-pack", ".venv", ".venv_validation", "dist", "out", "__pycache__"}
+    extra_excludes = list(exclude or [])
+
     for child in project_root.iterdir():
-        if child.name in skip:
+        if child.name.startswith("."):
             continue
+        if child.name in skip_dirs:
+            continue
+        # Skip root-level project metadata files
+        if child.is_file() and (child.name in _ROOT_META_FILES or child.suffix in _ROOT_META_EXTS):
+            continue
+        # Apply user exclude patterns against the top-level name
+        if _is_excluded(child.name, extra_excludes):
+            continue
+
         target = dest / child.name
         if child.is_dir():
             for sub in child.rglob("*"):
-                rel = sub.relative_to(child)
-                out_path = target / rel
+                rel = sub.relative_to(project_root)
+                rel_posix = rel.as_posix()
+                if sub.name == "__pycache__" or sub.suffix == ".pyc":
+                    continue
+                if _is_excluded(rel_posix, extra_excludes):
+                    continue
+                out_path = dest / rel
                 if sub.is_dir():
                     out_path.mkdir(parents=True, exist_ok=True)
                 else:
@@ -76,7 +117,7 @@ def _resolve_and_install(
         raise typer.Exit(code=1)
 
 
-@app.command("build")
+@app.command()
 def build(
     target: str | None = typer.Option(None, "--target", "-t", help="Build target name"),
     dry_run: bool = typer.Option(
@@ -116,27 +157,35 @@ def build(
 
     if not tgt.format or not tgt.entry_point:
         raise typer.Exit(code=1)
-    staging_base = Path(".uv-pack")
+    staging_base = Path(".uv-pack").resolve()
     paths = make_staging_paths(staging_base)
     clean_staging(paths)
     create_staging(paths)
 
     try:
-        _stage_sources(pyproject.parent, paths.sources)
+        _stage_sources(pyproject.parent, paths.sources, exclude=list(tgt.exclude))
         _resolve_and_install(pyproject, tgt, paths, staging_base)
 
         out_root = _output_root(pyproject, cfg)
         if tgt.format == "jar":
             output = _artifact_path(out_root, cfg, tgt, ".jar")
-            build_jar(paths, tgt.entry_point, tgt, output)
+            build_jar(paths, tgt.entry_point, tgt, output, project_root=pyproject.parent)
             typer.echo(str(output))
         elif tgt.format == "zip":
             output = _artifact_path(out_root, cfg, tgt, ".zip")
-            build_zip(paths, tgt.entry_point, output)
+            build_zip(paths, tgt.entry_point, tgt, output, project_root=pyproject.parent)
             typer.echo(str(output))
         elif tgt.format == "pex":
             output = _artifact_path(out_root, cfg, tgt, ".pex")
-            code = build_pex(paths, tgt.entry_point, output, process_run)
+            lock_file = staging_base / "resolved.lock"
+            code = build_pex(
+                paths,
+                tgt.entry_point,
+                output,
+                process_run,
+                lock_file=lock_file,
+                target=tgt,
+            )
             if code != 0:
                 raise typer.Exit(code=code)
             typer.echo(str(output))

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Single Spark job example for uv-pack"
 requires-python = ">=3.10"
 dependencies = [
-  "pyspark>=3.5",
+  "pyspark==3.5",
 ]
 
 [tool.uv-pack]

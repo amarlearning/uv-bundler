@@ -75,7 +75,9 @@ def test_invalid_combo_raises_value_error(tmp_path: Path) -> None:
         compile_lockfile(py, tgt, tmp_path / "x.lock", run=process.run, cwd=tmp_path)
 
 
-def test_missing_python_version_raises(tmp_path: Path) -> None:
+@requires_uv
+def test_missing_python_version_defaults_to_3_10(tmp_path: Path) -> None:
+    # python_version=None is accepted; the resolver defaults to "3.10"
     py = _write_min_pyproject(tmp_path)
     tgt = TargetConfig(
         format="jar",
@@ -85,8 +87,10 @@ def test_missing_python_version_raises(tmp_path: Path) -> None:
         python_version=None,
         manylinux="2014",
     )
-    with pytest.raises(ValueError):
-        compile_lockfile(py, tgt, tmp_path / "x.lock", run=process.run, cwd=tmp_path)
+    out = tmp_path / "x.lock"
+    code = compile_lockfile(py, tgt, out, run=process.run, cwd=tmp_path)
+    assert code == 0
+    assert out.exists()
 
 
 @requires_uv
