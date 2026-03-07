@@ -6,6 +6,7 @@ from lambda_jobs.utils import normalize_event
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    """AWS Lambda handler — receives event + context, returns API Gateway response."""
     payload = normalize_event(event)
     body = f"{payload['request_id']}:{payload['message']}"
     return {"statusCode": 200, "body": body}

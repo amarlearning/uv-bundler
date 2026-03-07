@@ -19,8 +19,6 @@ platform = "linux"
 arch = "x86_64"
 python_version = "3.10"
 manylinux = "2014"
-bundle = "fat"
-include_binaries = true
 compression = "deflated"
 
 [tool.uv-pack.targets.spark-zip]
@@ -28,9 +26,13 @@ format = "zip"
 entry_point = "app.main:run"
 platform = "linux"
 arch = "x86_64"
+python_version = "3.10"
+manylinux = "2014"
 
 [tool.uv-pack.targets.spark-pex]
 format = "pex"
 entry_point = "app.main:run"
 platform = "linux"
 arch = "x86_64"
+python_version = "3.10"
+manylinux = "2014"

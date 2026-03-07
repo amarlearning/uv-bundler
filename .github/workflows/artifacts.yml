@@ -32,11 +32,16 @@ jobs:
 
   # ── Cross-platform artifact builds ───────────────────────────────────────
   #
-  # Each job builds for a TARGET arch that is DIFFERENT from its runner arch.
-  # This exercises uv-pack's "Ghost Resolution" cross-platform capability:
+  # Three samples are built per runner, each targeting the OPPOSITE arch from
+  # the runner to exercise Ghost Resolution (uv pip compile/install --python-platform):
   #
-  #   ubuntu-latest     (x86_64) → builds for linux/aarch64
-  #   ubuntu-24.04-arm  (aarch64) → builds for linux/x86_64
+  #   ubuntu-latest     (x86_64 host) → builds for linux/aarch64
+  #   ubuntu-24.04-arm  (aarch64 host) → builds for linux/x86_64
+  #
+  # Samples and formats:
+  #   single-spark-job  JAR + ZIP + PEX   pyspark (pure Python)
+  #   numpy-etl         PEX               numpy + pandas (C extensions — PEX extracts .so to disk)
+  #   lambda-zip        ZIP               boto3 (pure Python, Lambda deployment format)
   #
   build-linux:
     name: Build linux/${{ matrix.target-arch }} on ${{ matrix.runner-arch }}
@@ -67,15 +72,16 @@ jobs:
       - name: Install uv-pack and pex
         run: pip install dist/uv_pack-*.whl pex
 
-      # PEX downloads target-platform wheels; cache to avoid repeated PyPI fetches
+      # PEX caches downloaded wheels in ~/.pex; key by arch + all PEX sample pyproject hashes
       - name: Cache PEX downloads
         uses: actions/cache@v4
         with:
           path: ~/.pex
-          key: pex-linux-${{ matrix.target-arch }}-${{ hashFiles('validation/samples/single-spark-job/pyproject.toml') }}
+          key: pex-linux-${{ matrix.target-arch }}-${{ hashFiles('validation/samples/single-spark-job/pyproject.toml', 'validation/samples/numpy-etl/pyproject.toml') }}
           restore-keys: pex-linux-${{ matrix.target-arch }}-
 
-      - name: Build JAR / ZIP / PEX for linux/${{ matrix.target-arch }}
+      # ── single-spark-job (JAR + ZIP + PEX) ───────────────────────────────
+      - name: Build single-spark-job for linux/${{ matrix.target-arch }}
         working-directory: validation/samples/single-spark-job
         env:
           OUT_DIR: ${{ github.workspace }}/artifacts
@@ -85,11 +91,30 @@ jobs:
           uv-pack --target spark-zip --arch ${{ matrix.target-arch }}
           uv-pack --target spark-pex --arch ${{ matrix.target-arch }}
 
+      # ── numpy-etl (PEX — C extensions require PEX, not JAR/ZIP) ──────────
+      - name: Build numpy-etl for linux/${{ matrix.target-arch }}
+        working-directory: validation/samples/numpy-etl
+        env:
+          OUT_DIR: ${{ github.workspace }}/artifacts
+        run: |
+          uv-pack --target etl-${{ matrix.target-arch }}
+
+      # ── lambda-zip (ZIP — pure Python boto3, Lambda deployment format) ────
+      - name: Build lambda-zip for linux/${{ matrix.target-arch }}
+        working-directory: validation/samples/lambda-zip
+        env:
+          OUT_DIR: ${{ github.workspace }}/artifacts
+        run: |
+          uv-pack --target lambda-${{ matrix.target-arch }}
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: single-spark-job-linux-${{ matrix.target-arch }}
-          path: artifacts/single-spark-job-linux-${{ matrix.target-arch }}.*
+          name: artifacts-linux-${{ matrix.target-arch }}
+          path: |
+            artifacts/single-spark-job-linux-${{ matrix.target-arch }}.*
+            artifacts/numpy-etl-linux-${{ matrix.target-arch }}.*
+            artifacts/lambda-zip-linux-${{ matrix.target-arch }}.*
           retention-days: 7
 
   # ── Runtime validation ────────────────────────────────────────────────────
@@ -97,8 +122,8 @@ jobs:
   # Each artifact set is validated on the NATIVE runner for that arch,
   # inside python:3.10-slim Docker — the exact target environment.
   #
-  # Each format runs as a separate step so failures are immediately visible.
-  # No packages are pre-installed: the fat artifacts must be self-contained.
+  # Separate steps per format and sample so failures are immediately visible.
+  # No packages are pre-installed: fat artifacts must be fully self-contained.
   #
   validate-linux:
     name: Validate linux/${{ matrix.target-arch }}
@@ -113,32 +138,51 @@ jobs:
             target-arch: aarch64
     runs-on: ${{ matrix.runner }}
     env:
-      STEM: single-spark-job-linux-${{ matrix.target-arch }}
+      SPARK_STEM: single-spark-job-linux-${{ matrix.target-arch }}
+      ETL_STEM: numpy-etl-linux-${{ matrix.target-arch }}
+      LAMBDA_STEM: lambda-zip-linux-${{ matrix.target-arch }}
       IMAGE: python:3.10-slim
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: single-spark-job-linux-${{ matrix.target-arch }}
+          name: artifacts-linux-${{ matrix.target-arch }}
           path: artifacts
 
-      - name: Run JAR in linux/${{ matrix.target-arch }} container
+      # ── single-spark-job ─────────────────────────────────────────────────
+      - name: Run single-spark-job JAR in linux/${{ matrix.target-arch }} container
         run: |
           docker run --rm \
             -v "${{ github.workspace }}/artifacts:/artifacts" \
             "$IMAGE" \
-            sh -c "python /artifacts/$STEM.jar | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+            sh -c "python /artifacts/$SPARK_STEM.jar | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
 
-      - name: Run ZIP in linux/${{ matrix.target-arch }} container
+      - name: Run single-spark-job ZIP in linux/${{ matrix.target-arch }} container
         run: |
           docker run --rm \
             -v "${{ github.workspace }}/artifacts:/artifacts" \
             "$IMAGE" \
-            sh -c "python /artifacts/$STEM.zip | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+            sh -c "python /artifacts/$SPARK_STEM.zip | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
 
-      - name: Run PEX in linux/${{ matrix.target-arch }} container
+      - name: Run single-spark-job PEX in linux/${{ matrix.target-arch }} container
         run: |
           docker run --rm \
             -v "${{ github.workspace }}/artifacts:/artifacts" \
             "$IMAGE" \
-            sh -c "python /artifacts/$STEM.pex | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+            sh -c "python /artifacts/$SPARK_STEM.pex | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+
+      # ── numpy-etl (native numpy/pandas C extensions via PEX) ─────────────
+      - name: Run numpy-etl PEX in linux/${{ matrix.target-arch }} container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/artifacts:/artifacts" \
+            "$IMAGE" \
+            sh -c "python /artifacts/$ETL_STEM.pex | tee /dev/stderr | grep -q 'ETL complete'"
+
+      # ── lambda-zip (pure Python boto3 in ZIP format) ──────────────────────
+      - name: Run lambda-zip ZIP in linux/${{ matrix.target-arch }} container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/artifacts:/artifacts" \
+            "$IMAGE" \
+            sh -c "python /artifacts/$LAMBDA_STEM.zip | tee /dev/stderr | grep -q 'lambda ok'"
