@@ -1,19 +1,49 @@
-# uv-pack 📦
+# uv-pack
 
-**The Universal Cross-Platform Packager for Python.**
+**Build deployment-ready Python artifacts for Linux — from any machine. No Docker, no Linux build server.**
 
-`uv-pack` is a specialized build-orchestration tool designed to produce platform-agnostic, deployment-ready Python artifacts (JAR, PEX, ZIP) from any host OS. It leverages `uv` for high-speed, cross-platform dependency resolution and provides a "Standardized Build" contract for Data Engineering pipelines.
+Data pipelines (Spark, Flink, Lambda) run on Linux. Your laptop runs macOS. Getting the right platform wheels into a deployment artifact has always required a dedicated Linux build environment — until now.
 
-## Quick Start
+---
 
-Add a target to your `pyproject.toml`:
+## The problem
+
+- **You need Linux wheels, but you're on macOS.** A plain `pip install` fetches the wrong binaries for your host machine, not your target.
+- **Switching to ARM (AWS Graviton, Apple Silicon) is painful.** Build pipelines are hard-coded to x86_64 and fail silently on aarch64.
+- **ZIP hacks break in production.** Native extensions (NumPy, Pandas) crash with `ImportError` when bundled without the correct platform wheels.
+
+---
+
+## The solution
+
+`uv-pack` uses **Ghost Resolution** — `uv pip compile` + `uv pip install --python-platform` — to resolve and download the correct Linux wheels on any host OS. No Docker, no cross-compilation, no remote build environment.
+
+One command produces a self-contained artifact that runs on Linux x86_64 or aarch64:
+
+```bash
+uv-pack --target spark-prod
+# → dist/my-spark-job-linux-x86_64.jar
+```
+
+Run it on Linux with zero pre-installed packages:
+
+```bash
+python my-spark-job-linux-x86_64.jar
+# Running single Spark job with pyspark 3.5.0
+```
+
+---
+
+## Quick start
+
+**1. Add a target to `pyproject.toml`:**
 
 ```toml
 [tool.uv-pack]
 project_name = "my-spark-job"
-default_target = "spark-linux"
+default_target = "spark-prod"
 
-[tool.uv-pack.targets.spark-linux]
+[tool.uv-pack.targets.spark-prod]
 format = "jar"
 entry_point = "app.main:run"
 platform = "linux"
@@ -22,233 +52,151 @@ python_version = "3.10"
 manylinux = "2014"
 ```
 
-Then build from any machine (macOS, Windows, Linux):
+**2. Build from any machine:**
 
 ```bash
-$ uv-pack
-Resolving dependencies for linux/x86_64...
-Installing dependencies into staging...
-/path/to/dist/my-spark-job-linux-x86_64.jar
+# Verify config without building
+uv-pack --dry-run
+
+# Build the artifact
+uv-pack --target spark-prod
 ```
 
-That's it — a single self-contained JAR with your source code and all dependencies bundled for Linux, built from your local machine. No Docker required.
+**3. Validate it works — no packages needed inside the container:**
+
+```bash
+docker run --rm \
+  -v "$(pwd)/dist:/artifacts" \
+  python:3.10-slim \
+  python /artifacts/my-spark-job-linux-x86_64.jar
+# Running single Spark job with pyspark 3.5.0
+```
 
 ---
 
-## Workflow: From Local Dev to Cloud Prod
+## Cross-arch builds
 
-```mermaid
-%%{init: { 'theme': 'neutral', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'ui-sans-serif, system-ui, sans-serif' } } }%%
-graph TD
-    %% Input Section
-    Host([Any Host Machine])
-    Config[pyproject.toml]
+Build for a different architecture without any additional tooling:
 
-    %% Engine Section (Logical Process)
-    subgraph Engine [uv-pack Core]
-        Resolve{Ghost Resolve}
-        Fetch[Fetch Target Wheels]
-        Stage[Staging & Flattening]
-        Boot(Inject Bootstrap)
-    end
-
-    %% Target/Architecture Section
-    Arch{Target Architecture}
-    X86[x86_64]
-    ARM[aarch64]
-
-    %% Final Artifacts
-    Jar[(Spark JAR)]
-    Pex[(Airflow PEX)]
-    Zip[(Lambda ZIP)]
-
-    %% Flow
-    Host --> Config
-    Config --> Resolve
-    Resolve --> Fetch
-    Fetch --> Stage
-    Stage --> Boot
-    Boot --> Arch
-    Arch --> X86
-    Arch --> ARM
-    X86 & ARM --> Jar & Pex & Zip
-
-    %% Simple, High-Contrast Styling
-    style Engine fill:#f8fafc,stroke:#334155,stroke-width:2px,stroke-dasharray: 5 5
-    style Host fill:#e2e8f0,stroke:#64748b
-    style Jar fill:#f1f5f9,stroke:#475569
-    style Pex fill:#f1f5f9,stroke:#475569
-    style Zip fill:#f1f5f9,stroke:#475569
+```bash
+# Build for ARM from any host (macOS, Linux x86_64, ...)
+uv-pack --target spark-prod --arch aarch64
+# → dist/my-spark-job-linux-aarch64.jar
 ```
 
-## 🚀 The Problem: "The Platform Tax"
-
-Enterprise data environments (Spark, Flink, AWS Lambda) often run on different architectures than developer laptops.
-
-*   **Infrastructure Friction:** Organizations maintain expensive Linux "Build Runners" just to package artifacts for Linux.
-*   **Architecture Lock-in:** Switching to cost-efficient hardware like **AWS Graviton (ARM)** is difficult because build pipelines are hard-coded to Intel/AMD chipsets.
-*   **Fragile Deployments:** Native extensions (NumPy, Pandas) often crash due to OS mismatches when bundled using simple ZIP hacks.
-
-## ✨ Key Features
-
-*   **Zero-Docker Cross-Packaging:** Build for `linux-x86_64` or `linux-aarch64` directly from your MacBook using "Ghost Resolution".
-*   **Powered by `uv`:** Leverages the world's fastest resolver and downloader for near-instant builds.
-*   **Dual-Identity Artifacts:** Produces JARs that are fully compatible with the JVM (Spark/Flink) while remaining native to Python.
-*   **Architecture Aware:** Automatically identifies and fetches the correct "Manylinux" wheels for your target destination.
-*   **Standardized Build Contract:** Define build targets in `pyproject.toml` for consistent pipeline execution.
+Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directly — the host arch is irrelevant.
 
 ---
 
-## 🛠 Configuration
+## How it works
 
-`uv-pack` uses a hierarchical configuration in `pyproject.toml`. Global settings provide fallbacks, while target-specific settings allow for platform overrides.
+`uv-pack` follows a 5-step lifecycle:
+
+1. **Context hydration** — reads `pyproject.toml`, merges CLI overrides, validates the entry point module path.
+2. **Ghost Resolution** — runs `uv pip compile --python-platform <target>` to pin platform-specific wheel hashes for the *target* OS, not the build host.
+3. **Staging** — runs `uv pip install --target` to extract wheels into a staging directory alongside your source code.
+4. **Bootstrap generation** — generates a `__main__.py` that correctly loads `site-packages` at runtime, including when executed directly from inside a zip archive (zipapp mode).
+5. **Assembly** — bundles everything into the requested format.
+
+---
+
+## Artifact formats
+
+### JAR — Spark / Flink
+
+- Self-contained zipapp, runnable with `python app.jar`
+- Includes `META-INF/MANIFEST.MF` for JVM tooling compatibility
+- Dependencies bundled under `site-packages/` inside the archive
+- Build fails if `.dylib` or `.dll` binaries are detected (Linux targets only)
+
+### ZIP — AWS Lambda / general deployment
+
+- Same internal layout as JAR (bootstrap + `site-packages/` + sources)
+- Suited for Lambda Layers and generic zip-based deployments
+
+### PEX — Airflow / schedulers
+
+- Single-file executable Python environment via the `pex` CLI
+- Uses a platform tag (e.g. `manylinux2014_x86_64-cp-310-cp310`) for cross-platform resolution
+- First build downloads packages from PyPI; subsequent builds use the cache
+- Cache `$PEX_ROOT` (default `~/.pex`) in CI to avoid repeated downloads
+
+---
+
+## Configuration reference
 
 ```toml
 [tool.uv-pack]
-# --- Global Defaults ---
-project_name = "analytics-engine"
-default_target = "spark-prod"
-output_base = "./dist"
+project_name = "analytics-engine"    # Used in artifact filename
+default_target = "spark-prod"         # Target used when --target is omitted
+output_base = "./dist"                # Output directory (override via OUT_DIR env var)
 
 [tool.uv-pack.targets.spark-prod]
-# --- Core Settings ---
-format = "jar"                  # Options: "jar", "pex", "zip"
-entry_point = "app.main:run"    # Callable string: module.submodule:function
+# Core
+format = "jar"                        # "jar" | "pex" | "zip"
+entry_point = "app.main:run"          # module.submodule:function
 
-# --- Resolution Settings (Cross-Platform) ---
-platform = "linux"              # Options: "linux", "macos", "windows"
-arch = "x86_64"                 # Options: "x86_64", "aarch64" (ARM)
-python_version = "3.10"         # Specific Python version for the target
-manylinux = "2014"              # glibc version (Options: "2010", "2014", or numeric e.g. "31")
+# Resolution (cross-platform)
+platform = "linux"                    # "linux" | "macos" | "windows"
+arch = "x86_64"                       # "x86_64" | "aarch64"
+python_version = "3.10"
+manylinux = "2014"                    # "2010" | "2014" | numeric (e.g. "31")
 
-# --- Packaging Options ---
-compression = "deflated"        # Options: "stored", "deflated"
+# Packaging
+compression = "deflated"              # "stored" | "deflated"
 
-# --- Advanced Options ---
+# Advanced
 exclude = ["tests/*", "**/__pycache__", "*.pyc", ".git*"]
 extra_files = { "config/prod.yaml" = "resources/config.yaml" }
 ```
 
+> **`OUT_DIR`** environment variable overrides `output_base` and takes precedence over the TOML value.
+
 ---
 
-## 🛠 Installation (Dev)
+## CLI reference
+
+```
+uv-pack [OPTIONS]
+
+Options:
+  --target TEXT           Target name from [tool.uv-pack.targets.*]
+  --platform TEXT         Override platform  (linux | macos | windows)
+  --arch TEXT             Override arch      (x86_64 | aarch64)
+  --python-version TEXT   Override Python version (e.g. 3.10)
+  --manylinux TEXT        Override manylinux tag  (e.g. 2014)
+  --dry-run               Print resolved config without building
+```
+
+---
+
+## Installation (development)
 
 ```bash
-# Clone the repository
 git clone https://github.com/amarlearning/uv-pack.git
 cd uv-pack
 
-# Install uv (https://docs.astral.sh/uv/)
-brew install uv  # macOS (or see docs for other OS)
+# Install uv — https://docs.astral.sh/uv/
+brew install uv   # macOS
 
-# Sync (creates .venv and installs deps from pyproject + dev extras)
-UV_PROJECT_ENVIRONMENT=.venv uv sync --all-extras
+make setup        # creates .venv and installs all dev deps
 
-# Run quality checks
-make fmt
-make lint
-make type
-make test
-make cov
-make bench
+make fmt          # format
+make lint         # ruff + mypy
+make test         # unit + integration tests
 ```
-
-> Note: Requires `uv` on PATH. Prefer `uv run ...` for all dev commands.
 
 ---
 
-## 📖 Usage
+## Contributing
 
-### 1. Dry-run using the default target
-Validate the `default_target` defined in `pyproject.toml`:
-
-```bash
-uv-pack --dry-run
-```
-
-### 2. Build a specific target
-Target a specific environment (e.g., `[tool.uv-pack.targets.spark-prod]`):
-
-```bash
-uv-pack --target spark-prod
-```
-
-### 3. CLI Overrides
-Override resolution settings on the fly without editing `pyproject.toml`:
-
-```bash
-uv-pack \
-  --target spark-prod \
-  --platform linux \
-  --arch aarch64 \
-  --python-version 3.11 \
-  --manylinux 2014
-```
-
-### 4. Dry-run with overrides
-```bash
-uv-pack --target spark-prod --platform linux --arch aarch64 --dry-run
-```
-
-> **Note:** Use `uv run uv-pack` if you haven't installed the package globally (e.g. in a fresh `uv sync` environment).
+- Branch: `feature/<desc>` or `fix/<desc>`
+- Commit: imperative mood, ≤ 50 chars summary
+- Quality gate: `make fmt && make lint && make type && make test`
+- PR: include rationale; update docs if behavior changes
 
 ---
 
-## 🏗 How it Works: The Execution Lifecycle
-
-`uv-pack` follows a 5-step lifecycle to ensure deterministic builds:
-
-1.  **Context Hydration**: Reads `pyproject.toml` and merges it with CLI overrides. Validates entry points and maps platforms (e.g., `linux` + `x86_64` → `x86_64-unknown-linux-gnu`).
-2.  **The "Ghost" Resolution**: Invokes `uv pip compile` for the **target OS** (not your local OS). With `manylinux = "2014"` this resolves against `x86_64-manylinux2014`, ensuring the lockfile pins the correct glibc-compatible wheel hashes.
-3.  **Staging & Wheel Extraction**: Downloads and unpacks the specific platform-compatible Wheels into a staging area, injecting your source code.
-4.  **Bootstrap Generation**: Generates a `__main__.py` bootstrap script to handle path injection and dynamic entry point execution at runtime.
-5.  **Final Assembly**: Bundles the artifacts into the requested format:
-    *   **JAR**: Adds `META-INF/MANIFEST.MF` for JVM compatibility.
-    *   **PEX**: Builds an executable Python environment.
-    *   **ZIP**: Optimized structure for AWS Lambda Layers or general usage.
-
----
-
-## 📦 Packaging Drivers
-- JAR
-  - Injects generated `__main__.py` at root for runtime bootstrap.
-  - Packages dependencies under `site-packages/` and preserves user sources.
-  - Adds `META-INF/MANIFEST.MF` for JVM tooling compatibility.
-  - Linux safety: build fails if `.dylib`/`.dll` binaries are detected in staging.
-  - Ideal for Spark/Flink where a JAR container is required.
-
-- ZIP
-  - Same internal layout as JAR (bootstrap + `site-packages/` + sources).
-  - Suited for AWS Lambda Layers and generic zip-based deployments.
-  - Deterministic assembly via Python’s `zipfile` with deflate compression.
-
-- PEX
-  - Builds an executable `.pex` by invoking `pex` with the resolved lockfile and staged sources.
-  - Entry point derived from `module:function` notation.
-  - Uses `--platform <tag>` (e.g. `manylinux2014_x86_64-cp-310-cp310`) for cross-platform resolution.
-  - Produces a single-file Python environment for schedulers (e.g., Airflow).
-  - **First build downloads packages from PyPI** (pex manages its own wheel cache). Subsequent builds are fast. In CI, cache `$PEX_ROOT` (default `~/.pex`) between runs.
-
----
-
-## 🧩 Core Modules
-
-1.  **Configuration loader (`config_loader`)**: Handles TOML parsing and hierarchy merging.
-2.  **Resolver (`resolver`)**: Interfaces with `uv` to generate the platform-specific lockfile.
-3.  **Packaging drivers (`packager`)**: Implement JAR, PEX, and ZIP assembly logic.
-4.  **CLI Entrypoint (`uv_pack.cli`)**: Provides a Typer-based command-line interface.
-
----
-
-## 🤝 Contributing
-
-Quick guide:
-- Setup: `make setup` (requires `uv` on PATH).
-- Branch: `feature/<desc>` or `fix/<desc>`.
-- Commit: imperative mood, ≤ 50 chars for the summary.
-- Quality gate: `make fmt && make lint && make type && make test`.
-- PR: include rationale; update docs if behavior changes.
-
-## 📜 License
+## License
 
 [Apache License 2.0](./LICENSE)
