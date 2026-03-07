@@ -8,8 +8,7 @@ uv-pack is a specialized build-orchestration tool designed to produce platform-a
 
 The tool uses a hierarchical configuration. Global settings provide fallbacks, while target-specific settings allow for platform overrides.
 
-
-```TOML
+```toml
 [tool.uv-pack]
 # --- Global Defaults ---
 project_name = "analytics-engine"
@@ -25,11 +24,9 @@ entry_point = "app.main:run"    # Callable string: module.submodule:function
 platform = "linux"              # Options: "linux", "macos", "windows"
 arch = "x86_64"                 # Options: "x86_64", "aarch64" (ARM)
 python_version = "3.10"         # Specific Python version for the target
-manylinux = "2014"              # glibc version (Options: "2010", "2014", "31")
+manylinux = "2014"              # glibc version (Options: "2010", "2014", or numeric e.g. "31")
 
-# --- Packaging Strategy ---
-bundle = "fat"                  # "fat" (deps included), "slim" (source only)
-include_binaries = true         # Whether to include compiled .so files
+# --- Packaging Options ---
 compression = "deflated"        # Options: "stored", "deflated"
 
 # --- Advanced Options ---
@@ -39,95 +36,123 @@ exclude = ["tests/*", "**/__pycache__", "*.pyc", ".git*"]
 extra_files = { "config/prod.yaml" = "resources/config.yaml" }
 ```
 
+> **Note on `OUT_DIR`:** The output directory can also be overridden via the `OUT_DIR` environment variable, which takes precedence over `output_base`.
+
 ## 3. The Execution Lifecycle (Step-by-Step)
 
 ### Step 1: Context Hydration
 
-The engine reads pyproject.toml and merges it with CLI overrides.
+The engine reads `pyproject.toml` and merges it with CLI overrides.
 
-* Validation: It checks if the entry_point module exists in the local source tree.
-* Platform Mapping: Translates linux + x86_64 into the PEP 508 platform string: x86_64-unknown-linux-gnu.
+- **Validation**: checks that the `entry_point` module path exists in the local source tree.
+- **Platform Mapping**: translates `platform + arch + manylinux` into a PEP 508 platform string.
+  For example, `linux + x86_64 + manylinux=2014` → `x86_64-manylinux2014`.
+  Without a manylinux constraint, falls back to the generic triple: `x86_64-unknown-linux-gnu`.
 
 ### Step 2: The "Ghost" Resolution
 
-uv-pack invokes uv to resolve dependencies for the Target Environment without installing them locally.
+uv-pack invokes `uv pip compile` to resolve dependencies for the **target environment** — not the local host. This produces a pinned lockfile with the correct platform-specific wheel hashes.
 
-* The Command:
-  ```bash
-  uv pip compile pyproject.toml \
-  --python-platform <target_platform_string> \
-  --python-version <config_python_version> \
+```bash
+uv pip compile pyproject.toml \
+  --python-platform x86_64-manylinux2014 \
+  --python-version 3.10 \
   --output-file .uv-pack/resolved.lock
-  ```
+```
 
-* Why: This ensures the lockfile contains the specific hashes for "manylinux" wheels, even if the build is running on a MacBook.
+Why: ensures the lockfile contains manylinux-compatible wheel hashes even when building from macOS or Windows.
 
 ### Step 3: Staging & Wheel Extraction
 
-The engine creates a temporary staging/ directory.
+The engine creates a temporary `.uv-pack/staging/` directory and installs the resolved dependencies into it using `uv pip install --target`, which extracts `.whl` files directly into `staging/site-packages/`:
 
-1. Download: Downloads all wheels identified in the resolved.lock using uv pip download.
-2. Unpack: Every .whl is unzipped into staging/site-packages/.
-3. Source Injection: The local project source code is copied into the root of staging/.
+```bash
+uv pip install \
+  -r .uv-pack/resolved.lock \
+  --target .uv-pack/staging/site-packages \
+  --python-platform x86_64-manylinux2014 \
+  --python-version 3.10
+```
+
+The local project source code is then copied into `staging/src/`.
 
 ### Step 4: The Bootstrap Generation
 
-For JAR and ZIP formats, a bootstrap script is required to handle the runtime environment within the compressed artifact. uv-pack generates a __main__.py:
+For JAR and ZIP formats, uv-pack generates a `__main__.py` bootstrap script that:
+
+1. Detects whether it is running from inside a zip archive (zipapp mode) by checking `sys.path[0].is_file()`.
+2. In zipapp mode, inserts `<archive>/site-packages` into `sys.path` — Python's zipimport resolves this sub-path within the archive without a filesystem presence.
+3. In extracted/development mode, looks for `site-packages/` relative to `__file__`.
+4. Dynamically imports and calls the configured entry point function.
 
 ```python
-import sys, os, importlib
+import importlib, sys
+from pathlib import Path
 
-# 1. Path Injection: Add the internal site-packages to the head of sys.path
-base_dir = os.path.dirname(__file__)
-site_packages = os.path.join(base_dir, "site-packages")
-sys.path.insert(0, site_packages)
+def _setup_path():
+    archive = Path(sys.path[0]) if sys.path else None
+    if archive is not None and archive.is_file():
+        # zipapp mode: archive/site-packages is resolved by zipimport
+        sys.path.insert(0, str(archive) + '/site-packages')
+    else:
+        root = Path(__file__).parent
+        site_packages = root / 'site-packages'
+        if site_packages.exists():
+            sys.path.insert(0, str(site_packages))
 
-# 2. Entry Point Execution: Dynamically load the user's function
-# Translates "app.main:run" -> from app.main import run; run()
-module_str, func_str = "app.main", "run"
-module = importlib.import_module(module_str)
-func = getattr(module, func_str)
+def _run():
+    _setup_path()
+    mod = importlib.import_module('app.main')
+    fn = getattr(mod, 'run')
+    res = fn()
+    return res if isinstance(res, int) else 0
 
-if __name__ == "__main__":
-    func()
+if __name__ == '__main__':
+    raise SystemExit(_run())
 ```
 
+This makes JAR and ZIP artifacts **truly self-contained** — no packages need to be pre-installed on the runtime host.
 
 ### Step 5: Final Assembly (Target Specifics)
 
-Depending on the format flag, the engine performs the final wrap:
+Depending on the `format` field, the engine performs the final wrap:
 
-* JAR: Adds META-INF/MANIFEST.MF. Validates that no .dylib or .dll files are present (checks for .so only).
-* PEX: Directs the pex library to build an executable using the staging/ directory as the source.
-* ZIP: Re-organizes the staging/ structure if needed (e.g., for AWS Lambda Layers, it moves site-packages to python/).
+- **JAR**: Adds `META-INF/MANIFEST.MF` for JVM tooling compatibility. Validates that no `.dylib`/`.dll` binaries are present (Linux targets only). Runs as `python app.jar`.
+- **ZIP**: Same internal layout as JAR (bootstrap + `site-packages/` + sources). Suited for AWS Lambda Layers or general deployment. Runs as `python app.zip`.
+- **PEX**: Invokes the `pex` CLI with `-r resolved.lock --platform <canonical-tag> --sources-directory staging/src`. The canonical tag format is `manylinux2014_x86_64-cp-310-cp310`. PEX manages its own wheel cache (`~/.pex`); first build downloads from PyPI, subsequent builds use the cache.
 
 ## 4. Key Decisions & Decision Log
 
 | Decision Point | Selection | Technical Justification |
 | :---- | :---- | :---- |
-| Glibc Compatibility | Default to manylinux2014 | Matches the older Linux kernels found in Enterprise Spark (EMR 6.x) and Databricks. |
-| Dependency Location | /site-packages subdir | Keeps the root of the JAR clean and prevents local source modules from being accidentally overwritten by dependency files. |
-| Resolution Tool | uv Subprocess | Provides the best performance. If uv is missing, the tool fails early with a clear installation guide. |
-| Cross-Arch Logic | Ghost Resolve | Eliminates the need for Docker. By resolving for the target tags, we can build ARM64 artifacts on Intel machines. |
+| Glibc Compatibility | Default to manylinux2014 | Matches older Linux kernels found in Enterprise Spark (EMR 6.x) and Databricks. |
+| Dependency Location | `/site-packages` subdir | Keeps the root of the JAR clean and prevents source modules from being overwritten by dependency files. |
+| Resolution Tool | `uv pip compile` + `uv pip install --target` | Fastest resolver available; `--target` extracts wheels directly without a venv. |
+| Cross-Arch | Ghost Resolution (no Docker) | `uv pip compile/install --python-platform` resolves for the target OS entirely on the build host, eliminating Docker as a build dependency. |
+| Bootstrap path injection | `sys.path[0]` (zipapp-aware) | `Path(__file__).parent.exists()` fails inside zip archives; `sys.path[0]` is always the zip file when running as a zipapp, and Python's zipimport handles `zipfile/subdir` sys.path entries. |
 
-## 5. Artifact Directory Structure (Inside the JAR)
+## 5. Artifact Directory Structure (Inside the JAR/ZIP)
 
-```shell
+```
 artifact.jar
 ├── __main__.py               # Generated bootstrap
 ├── app/                      # User source code
 │   └── main.py
-├── site-packages/            # Unzipped wheels
-│   ├── pandas/
-│   ├── numpy/
+├── site-packages/            # Extracted wheels (installed by uv pip install --target)
+│   ├── pyspark/
+│   ├── py4j/
 │   └── ...
 └── META-INF/
-    └── MANIFEST.MF           # JVM Metadata
+    └── MANIFEST.MF           # JVM Metadata (JAR only)
 ```
 
-## 6. Implementation Roadmap
+## 6. Module Overview
 
-1. Module config_loader: Handles TOML parsing and hierarchy merging.
-2. Module resolver: Interfaces with uv to generate the platform-specific lockfile.
-3. Module packager: Base class with specialized JarPackager, PexPackager, and ZipPackager implementations.
-4. CLI Entrypoint: Built with click or typer to provide a clean user interface.
+| Module | Responsibility |
+| :---- | :---- |
+| `config_loader` | Parses `pyproject.toml`, validates the `[tool.uv-pack]` section, merges CLI overrides |
+| `resolver` | Builds and invokes `uv pip compile` (lock) and `uv pip install --target` (extract) commands |
+| `packager` | Assembles JAR, ZIP, and PEX artifacts from the staging directory |
+| `bootstrap` | Generates the `__main__.py` entry point script embedded in JAR/ZIP artifacts |
+| `staging` | Defines and manages the temporary `.uv-pack/staging/` directory layout |
+| `cli` | Typer-based CLI: `uv-pack [--target] [--dry-run] [--platform] [--arch] [--python-version] [--manylinux]` |
