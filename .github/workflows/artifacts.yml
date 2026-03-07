@@ -94,9 +94,11 @@ jobs:
 
   # ── Runtime validation ────────────────────────────────────────────────────
   #
-  # Each artifact set is validated on the NATIVE runner for that arch.
-  # Validation runs inside python:3.10-slim Docker so we test the actual
-  # Linux runtime environment without polluting the runner.
+  # Each artifact set is validated on the NATIVE runner for that arch,
+  # inside python:3.10-slim Docker — the exact target environment.
+  #
+  # Each format runs as a separate step so failures are immediately visible.
+  # No packages are pre-installed: the fat artifacts must be self-contained.
   #
   validate-linux:
     name: Validate linux/${{ matrix.target-arch }}
@@ -110,25 +112,33 @@ jobs:
           - runner: ubuntu-24.04-arm    # aarch64 runtime
             target-arch: aarch64
     runs-on: ${{ matrix.runner }}
+    env:
+      STEM: single-spark-job-linux-${{ matrix.target-arch }}
+      IMAGE: python:3.10-slim
     steps:
-      - uses: actions/checkout@v4
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: single-spark-job-linux-${{ matrix.target-arch }}
-          path: validation/out/single-spark-job
+          path: artifacts
 
-      - name: Validate in Docker (python:3.10-slim / linux/${{ matrix.target-arch }})
+      - name: Run JAR in linux/${{ matrix.target-arch }} container
         run: |
           docker run --rm \
-            -v "${{ github.workspace }}:/workspace" \
-            -w /workspace \
-            python:3.10-slim \
-            bash -lc "
-              pip install pyspark==3.5.0 -q &&
-              python validation/validate_artifacts.py \
-                --out-dir validation/out/single-spark-job \
-                --target-os linux \
-                --target-arch ${{ matrix.target-arch }}
-            "
+            -v "${{ github.workspace }}/artifacts:/artifacts" \
+            "$IMAGE" \
+            sh -c "python /artifacts/$STEM.jar | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+
+      - name: Run ZIP in linux/${{ matrix.target-arch }} container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/artifacts:/artifacts" \
+            "$IMAGE" \
+            sh -c "python /artifacts/$STEM.zip | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+
+      - name: Run PEX in linux/${{ matrix.target-arch }} container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/artifacts:/artifacts" \
+            "$IMAGE" \
+            sh -c "python /artifacts/$STEM.pex | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
