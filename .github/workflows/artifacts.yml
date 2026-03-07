@@ -1,0 +1,134 @@
+name: Build & Validate Artifacts
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # ── Build the uv-pack distribution wheel ─────────────────────────────────
+  build-wheel:
+    name: Build uv-pack wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uv-pack-wheel
+          path: dist/uv_pack-*-py3-none-any.whl
+          retention-days: 1
+
+  # ── Cross-platform artifact builds ───────────────────────────────────────
+  #
+  # Each job builds for a TARGET arch that is DIFFERENT from its runner arch.
+  # This exercises uv-pack's "Ghost Resolution" cross-platform capability:
+  #
+  #   ubuntu-latest     (x86_64) → builds for linux/aarch64
+  #   ubuntu-24.04-arm  (aarch64) → builds for linux/x86_64
+  #
+  build-linux:
+    name: Build linux/${{ matrix.target-arch }} on ${{ matrix.runner-arch }}
+    needs: build-wheel
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest        # x86_64 host → aarch64 target
+            runner-arch: x86_64
+            target-arch: aarch64
+          - runner: ubuntu-24.04-arm     # aarch64 host → x86_64 target
+            runner-arch: aarch64
+            target-arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download uv-pack wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: uv-pack-wheel
+          path: dist
+
+      # uv must be on PATH so uv-pack can invoke `uv pip compile/install`
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install uv-pack and pex
+        run: pip install dist/uv_pack-*.whl pex
+
+      # PEX downloads target-platform wheels; cache to avoid repeated PyPI fetches
+      - name: Cache PEX downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.pex
+          key: pex-linux-${{ matrix.target-arch }}-${{ hashFiles('validation/samples/single-spark-job/pyproject.toml') }}
+          restore-keys: pex-linux-${{ matrix.target-arch }}-
+
+      - name: Build JAR / ZIP / PEX for linux/${{ matrix.target-arch }}
+        working-directory: validation/samples/single-spark-job
+        env:
+          OUT_DIR: ${{ github.workspace }}/artifacts
+        run: |
+          mkdir -p "$OUT_DIR"
+          uv-pack --target spark-jar --arch ${{ matrix.target-arch }}
+          uv-pack --target spark-zip --arch ${{ matrix.target-arch }}
+          uv-pack --target spark-pex --arch ${{ matrix.target-arch }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-spark-job-linux-${{ matrix.target-arch }}
+          path: artifacts/single-spark-job-linux-${{ matrix.target-arch }}.*
+          retention-days: 7
+
+  # ── Runtime validation ────────────────────────────────────────────────────
+  #
+  # Each artifact set is validated on the NATIVE runner for that arch.
+  # Validation runs inside python:3.10-slim Docker so we test the actual
+  # Linux runtime environment without polluting the runner.
+  #
+  validate-linux:
+    name: Validate linux/${{ matrix.target-arch }}
+    needs: build-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest       # x86_64 runtime
+            target-arch: x86_64
+          - runner: ubuntu-24.04-arm    # aarch64 runtime
+            target-arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: single-spark-job-linux-${{ matrix.target-arch }}
+          path: validation/out/single-spark-job
+
+      - name: Validate in Docker (python:3.10-slim / linux/${{ matrix.target-arch }})
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            python:3.10-slim \
+            bash -lc "
+              pip install pyspark==3.5.0 -q &&
+              python validation/validate_artifacts.py \
+                --out-dir validation/out/single-spark-job \
+                --target-os linux \
+                --target-arch ${{ matrix.target-arch }}
+            "
