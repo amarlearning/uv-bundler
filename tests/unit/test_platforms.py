@@ -39,6 +39,10 @@ def test_pep508_platform_manylinux2014_aarch64() -> None:
     assert pep508_platform("linux", "aarch64", "2014") == "aarch64-manylinux2014"
 
 
+def test_pep508_platform_manylinux2010() -> None:
+    assert pep508_platform("linux", "x86_64", "2010") == "x86_64-manylinux2010"
+
+
 def test_pep508_platform_manylinux_numeric() -> None:
     # "31" → manylinux_2_31
     assert pep508_platform("linux", "x86_64", "31") == "x86_64-manylinux_2_31"
