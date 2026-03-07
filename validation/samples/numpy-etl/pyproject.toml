@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "NumPy/Pandas ETL example — native extension wheel resolution for x86_64 and aarch64"
 requires-python = ">=3.10"
 dependencies = [
-  "numpy>=1.26",
-  "pandas>=2.0",
+  # Pin to versions with known manylinux2014 binary wheels for Python 3.10
+  # on both x86_64 and aarch64. Newer pandas/numpy may only ship sdists for
+  # older Python versions, causing source builds to fail in cross-arch CI.
+  "numpy==1.26.4",
+  "pandas==2.2.3",
 ]
 
 [tool.uv-pack]
