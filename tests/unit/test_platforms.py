@@ -1,6 +1,6 @@
 import pytest
 
-from uv_pack.domain.platforms import pep508_platform
+from uv_bundler.domain.platforms import pep508_platform
 
 
 def test_pep508_platform_linux_x86_64() -> None:

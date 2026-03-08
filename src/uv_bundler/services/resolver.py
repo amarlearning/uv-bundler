@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from uv_pack.domain.config import TargetConfig
-from uv_pack.domain.platforms import pep508_platform
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.domain.platforms import pep508_platform
 
 
 class Runner(Protocol):

@@ -3,14 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from uv_pack.domain.config import (
+from uv_bundler.domain.config import (
     GlobalConfig,
     TargetConfig,
     UvPackConfig,
     assert_module_path_exists,
 )
-from uv_pack.services.config_loader import load_pyproject
-
+from uv_bundler.services.config_loader import load_pyproject
 
 # ── assert_module_path_exists ─────────────────────────────────────────────────
 
@@ -102,10 +101,10 @@ def test_resolve_target_by_explicit_name() -> None:
 def test_invalid_entry_point_format_rejected(tmp_path: Path) -> None:
     pyproject = textwrap.dedent(
         """
-        [tool.uv-pack]
+        [tool.uv-bundler]
         default_target = "t"
 
-        [tool.uv-pack.targets.t]
+        [tool.uv-bundler.targets.t]
         format = "jar"
         entry_point = "app.main"
         """

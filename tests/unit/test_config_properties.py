@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from uv_pack.domain.config import TargetConfig
+from uv_bundler.domain.config import TargetConfig
 
 
 def valid_module_strategy() -> st.SearchStrategy[str]:

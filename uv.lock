@@ -1067,7 +1067,7 @@ wheels = [
 ]
 
 [[package]]
-name = "uv-pack"
+name = "uv-bundler"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },

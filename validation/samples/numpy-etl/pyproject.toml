@@ -11,7 +11,7 @@ dependencies = [
   "pandas==2.2.3",
 ]
 
-[tool.uv-pack]
+[tool.uv-bundler]
 project_name = "numpy-etl"
 default_target = "etl-x86_64"
 output_base = "./dist"
@@ -19,7 +19,7 @@ output_base = "./dist"
 # PEX is the correct format for C extensions (numpy/pandas .so files cannot
 # be loaded via zipimport — PEX extracts them to disk before importing).
 
-[tool.uv-pack.targets.etl-x86_64]
+[tool.uv-bundler.targets.etl-x86_64]
 format = "pex"
 entry_point = "etl.main:run"
 platform = "linux"
@@ -27,7 +27,7 @@ arch = "x86_64"
 python_version = "3.10"
 manylinux = "2014"
 
-[tool.uv-pack.targets.etl-aarch64]
+[tool.uv-bundler.targets.etl-aarch64]
 format = "pex"
 entry_point = "etl.main:run"
 platform = "linux"

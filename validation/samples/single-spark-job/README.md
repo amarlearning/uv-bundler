@@ -1,6 +1,6 @@
 # single-spark-job
 
-Minimal Spark job demonstrating how to configure and validate a single target with uv-pack.
+Minimal Spark job demonstrating how to configure and validate a single target with uv-bundler.
 
 ## Overview
 
@@ -14,7 +14,7 @@ The `app.main:run` entry point prints the detected pyspark version and exits.
 
 - Java and pyspark-compatible environment (optional, for running the job locally)
 - `uv` installed globally on your system
-- `uv-pack` installed globally on your system
+- `uv-bundler` installed globally on your system
 
 Install `uv` (if not already installed). For example:
 
@@ -22,12 +22,12 @@ Install `uv` (if not already installed). For example:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Install `uv-pack` as a global CLI tool (one of):
+Install `uv-bundler` as a global CLI tool (one of):
 
 ```bash
-pip install uv-pack
+pip install uv-bundler
 # or
-uv tool install uv-pack
+uv tool install uv-bundler
 ```
 
 ## Project layout
@@ -40,7 +40,7 @@ validation/samples/single-spark-job/
     main.py
 ```
 
-## Building with uv-pack
+## Building with uv-bundler
 
 Change into the sample directory (where this README and `pyproject.toml` live):
 
@@ -51,7 +51,7 @@ cd /path/to/validation/samples/single-spark-job
 Run a dry-run build using the default target:
 
 ```bash
-uv-pack --dry-run
+uv-bundler --dry-run
 ```
 
 This command:
@@ -66,7 +66,7 @@ This command:
 You can also select the target explicitly:
 
 ```bash
-uv-pack --target spark-jar --dry-run
+uv-bundler --target spark-jar --dry-run
 ```
 
 ### Cross-platform experiments
@@ -74,7 +74,7 @@ uv-pack --target spark-jar --dry-run
 Override resolution settings to simulate different Python versions and architectures:
 
 ```bash
-uv-pack \
+uv-bundler \
   --target spark-jar \
   --platform linux \
   --arch aarch64 \
@@ -83,19 +83,19 @@ uv-pack \
   --dry-run
 ```
 
-These commands do not require the uv-pack source repository. They only use the
-globally installed `uv` and `uv-pack` binaries to validate configuration and
+These commands do not require the uv-bundler source repository. They only use the
+globally installed `uv` and `uv-bundler` binaries to validate configuration and
 produce lockfiles for the requested target platform.
 
 ## Expected outputs
 
-- A `.uv-pack` directory containing a lockfile for the target platform
+- A `.uv-bundler` directory containing a lockfile for the target platform
 - Dry-run console output describing the chosen target and resolution parameters
 
 ## Troubleshooting
 
-- If `uv-pack` is not found, ensure it is installed globally (for example with
-  `pip install uv-pack` or `uv tool install uv-pack`) and available on PATH.
+- If `uv-bundler` is not found, ensure it is installed globally (for example with
+  `pip install uv-bundler` or `uv tool install uv-bundler`) and available on PATH.
 - If `uv` is missing, install it from https://docs.astral.sh/uv/.
 - If you want to run the Spark job locally (not just dry-run builds), install
   `pyspark` into a virtual environment in this directory (`uv venv && uv pip

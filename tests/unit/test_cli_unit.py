@@ -14,10 +14,9 @@ from zipfile import ZipFile
 import pytest
 from typer.testing import CliRunner
 
-import uv_pack.cli as _cli
-from uv_pack.cli import _artifact_path, _is_excluded, _output_root, _stage_sources, app
-from uv_pack.domain.config import GlobalConfig, TargetConfig, UvPackConfig
-
+import uv_bundler.cli as _cli
+from uv_bundler.cli import _artifact_path, _is_excluded, _output_root, _stage_sources, app
+from uv_bundler.domain.config import GlobalConfig, TargetConfig, UvPackConfig
 
 # ── _is_excluded ──────────────────────────────────────────────────────────────
 
@@ -209,11 +208,11 @@ def _write_minimal_project(tmp_path: Path) -> None:
             version = "0.1.0"
             dependencies = []
 
-            [tool.uv-pack]
+            [tool.uv-bundler]
             project_name = "test-app"
             default_target = "spark-prod"
 
-            [tool.uv-pack.targets.spark-prod]
+            [tool.uv-bundler.targets.spark-prod]
             format = "jar"
             entry_point = "app.main:run"
             platform = "linux"
@@ -221,7 +220,7 @@ def _write_minimal_project(tmp_path: Path) -> None:
             python_version = "3.10"
             manylinux = "2014"
 
-            [tool.uv-pack.targets.spark-zip]
+            [tool.uv-bundler.targets.spark-zip]
             format = "zip"
             entry_point = "app.main:run"
             platform = "linux"
@@ -239,7 +238,7 @@ def test_dry_run_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     runner = CliRunner()
     result = runner.invoke(app, ["--dry-run"])
     assert result.exit_code == 0
-    assert "uv-pack dry run" in result.stdout
+    assert "uv-bundler dry run" in result.stdout
 
 
 def test_dry_run_shows_resolved_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

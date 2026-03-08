@@ -1,4 +1,4 @@
-# uv-pack
+# uv-bundler
 
 **Build deployment-ready Python artifacts for Linux — from any machine. No Docker, no Linux build server.**
 
@@ -16,12 +16,12 @@ Data pipelines (Spark, Flink, Lambda) run on Linux. Your laptop runs macOS. Gett
 
 ## The solution
 
-`uv-pack` uses **Ghost Resolution** — `uv pip compile` + `uv pip install --python-platform` — to resolve and download the correct Linux wheels on any host OS. No Docker, no cross-compilation, no remote build environment.
+`uv-bundler` uses **Ghost Resolution** — `uv pip compile` + `uv pip install --python-platform` — to resolve and download the correct Linux wheels on any host OS. No Docker, no cross-compilation, no remote build environment.
 
 One command produces a self-contained artifact that runs on Linux x86_64 or aarch64:
 
 ```bash
-uv-pack --target spark-prod
+uv-bundler --target spark-prod
 # → dist/my-spark-job-linux-x86_64.jar
 ```
 
@@ -39,11 +39,11 @@ python my-spark-job-linux-x86_64.jar
 **1. Add a target to `pyproject.toml`:**
 
 ```toml
-[tool.uv-pack]
+[tool.uv-bundler]
 project_name = "my-spark-job"
 default_target = "spark-prod"
 
-[tool.uv-pack.targets.spark-prod]
+[tool.uv-bundler.targets.spark-prod]
 format = "jar"
 entry_point = "app.main:run"
 platform = "linux"
@@ -56,10 +56,10 @@ manylinux = "2014"
 
 ```bash
 # Verify config without building
-uv-pack --dry-run
+uv-bundler --dry-run
 
 # Build the artifact
-uv-pack --target spark-prod
+uv-bundler --target spark-prod
 ```
 
 **3. Validate it works — no packages needed inside the container:**
@@ -80,7 +80,7 @@ Build for a different architecture without any additional tooling:
 
 ```bash
 # Build for ARM from any host (macOS, Linux x86_64, ...)
-uv-pack --target spark-prod --arch aarch64
+uv-bundler --target spark-prod --arch aarch64
 # → dist/my-spark-job-linux-aarch64.jar
 ```
 
@@ -90,7 +90,7 @@ Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directl
 
 ## How it works
 
-`uv-pack` follows a 5-step lifecycle:
+`uv-bundler` follows a 5-step lifecycle:
 
 1. **Context hydration** — reads `pyproject.toml`, merges CLI overrides, validates the entry point module path.
 2. **Ghost Resolution** — runs `uv pip compile --python-platform <target>` to pin platform-specific wheel hashes for the *target* OS, not the build host.
@@ -126,12 +126,12 @@ Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directl
 ## Configuration reference
 
 ```toml
-[tool.uv-pack]
+[tool.uv-bundler]
 project_name = "analytics-engine"    # Used in artifact filename
 default_target = "spark-prod"         # Target used when --target is omitted
 output_base = "./dist"                # Output directory (override via OUT_DIR env var)
 
-[tool.uv-pack.targets.spark-prod]
+[tool.uv-bundler.targets.spark-prod]
 # Core
 format = "jar"                        # "jar" | "pex" | "zip"
 entry_point = "app.main:run"          # module.submodule:function
@@ -157,10 +157,10 @@ extra_files = { "config/prod.yaml" = "resources/config.yaml" }
 ## CLI reference
 
 ```
-uv-pack [OPTIONS]
+uv-bundler [OPTIONS]
 
 Options:
-  --target TEXT           Target name from [tool.uv-pack.targets.*]
+  --target TEXT           Target name from [tool.uv-bundler.targets.*]
   --platform TEXT         Override platform  (linux | macos | windows)
   --arch TEXT             Override arch      (x86_64 | aarch64)
   --python-version TEXT   Override Python version (e.g. 3.10)
@@ -170,11 +170,21 @@ Options:
 
 ---
 
+## Installation
+
+```bash
+pip install uv-bundler
+# or
+uv tool install uv-bundler   # installs uv-bundler as an isolated global CLI
+```
+
+---
+
 ## Installation (development)
 
 ```bash
-git clone https://github.com/amarlearning/uv-pack.git
-cd uv-pack
+git clone https://github.com/amarlearning/uv-bundler.git
+cd uv-bundler
 
 # Install uv — https://docs.astral.sh/uv/
 brew install uv   # macOS

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from uv_pack.adapters.fs import clean_staging, create_staging
-from uv_pack.services.staging import StagingPaths
+from uv_bundler.adapters.fs import clean_staging, create_staging
+from uv_bundler.services.staging import StagingPaths
 
 
 def make_paths(tmp_path: Path) -> StagingPaths:

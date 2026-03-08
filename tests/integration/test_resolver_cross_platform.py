@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from uv_pack.adapters import process
-from uv_pack.domain.config import TargetConfig
-from uv_pack.services.resolver import compile_lockfile
+from uv_bundler.adapters import process
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.services.resolver import compile_lockfile
 
 has_uv = shutil.which("uv") is not None
 requires_uv = pytest.mark.skipif(not has_uv, reason="uv not found on PATH")
@@ -51,7 +51,7 @@ def test_compile_lockfile_cross_platform_matrix(
         python_version=pyver,
         manylinux="2014",
     )
-    out = tmp_path / ".uv-pack" / f"resolved-{platform}-{arch}-{pyver}.lock"
+    out = tmp_path / ".uv-bundler" / f"resolved-{platform}-{arch}-{pyver}.lock"
     out.parent.mkdir(parents=True, exist_ok=True)
     code = compile_lockfile(py, tgt, out, run=process.run, cwd=tmp_path)
     assert code == 0
@@ -104,7 +104,7 @@ def test_compile_lockfile_is_repeatable(tmp_path: Path) -> None:
         python_version="3.10",
         manylinux="2014",
     )
-    out = tmp_path / ".uv-pack" / "resolved.lock"
+    out = tmp_path / ".uv-bundler" / "resolved.lock"
     out.parent.mkdir(parents=True, exist_ok=True)
     code1 = compile_lockfile(py, tgt, out, run=process.run, cwd=tmp_path)
     data1 = out.read_text()

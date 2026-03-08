@@ -1,6 +1,6 @@
 # numpy-etl
 
-Demonstrates uv-pack's cross-arch native extension wheel resolution using NumPy and Pandas.
+Demonstrates uv-bundler's cross-arch native extension wheel resolution using NumPy and Pandas.
 
 ## What this showcases
 
@@ -9,7 +9,7 @@ different `.so` binary. A naive `pip install` on macOS downloads macOS wheels, w
 with `ImportError` when deployed to Linux. A plain ZIP bundling your local venv would embed
 the wrong binaries.
 
-uv-pack's Ghost Resolution (`uv pip install --python-platform`) fetches the correct
+uv-bundler's Ghost Resolution (`uv pip install --python-platform`) fetches the correct
 `manylinux2014_x86_64` or `manylinux2014_aarch64` wheels regardless of your build host.
 
 Because numpy/pandas are C extensions, the **PEX format** is used — PEX extracts `.so`
@@ -39,13 +39,13 @@ validation/samples/numpy-etl/
 cd validation/samples/numpy-etl
 
 # Verify config
-uv-pack --dry-run
+uv-bundler --dry-run
 
 # Build for linux/x86_64 (from any host OS)
-uv-pack --target etl-x86_64
+uv-bundler --target etl-x86_64
 
 # Build for linux/aarch64 — Ghost Resolution fetches aarch64 numpy/pandas wheels
-uv-pack --target etl-aarch64
+uv-bundler --target etl-aarch64
 ```
 
 Artifacts land in `dist/`:

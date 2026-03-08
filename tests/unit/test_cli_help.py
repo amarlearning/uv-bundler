@@ -1,6 +1,6 @@
 from typer.testing import CliRunner
 
-from uv_pack.cli import app
+from uv_bundler.cli import app
 
 
 def test_cli_help_shows_commands() -> None:

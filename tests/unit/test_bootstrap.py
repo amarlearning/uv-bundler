@@ -1,4 +1,4 @@
-from uv_pack.services.bootstrap import render_bootstrap
+from uv_bundler.services.bootstrap import render_bootstrap
 
 
 def test_render_bootstrap_contains_entry_point() -> None:

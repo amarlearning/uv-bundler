@@ -7,12 +7,12 @@ dependencies = [
   "boto3>=1.35",
 ]
 
-[tool.uv-pack]
+[tool.uv-bundler]
 project_name = "lambda-zip"
 default_target = "lambda-x86_64"
 output_base = "./dist"
 
-[tool.uv-pack.targets.lambda-x86_64]
+[tool.uv-bundler.targets.lambda-x86_64]
 format = "zip"
 entry_point = "lambda_jobs.main:run"
 platform = "linux"
@@ -22,7 +22,7 @@ manylinux = "2014"
 
 # AWS Lambda Graviton (ARM) — same source, different arch.
 # Ghost Resolution fetches linux/aarch64 wheels from any build host.
-[tool.uv-pack.targets.lambda-aarch64]
+[tool.uv-bundler.targets.lambda-aarch64]
 format = "zip"
 entry_point = "lambda_jobs.main:run"
 platform = "linux"

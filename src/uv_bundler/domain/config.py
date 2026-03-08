@@ -32,7 +32,7 @@ class TargetConfig(BaseModel):
     def validate_entry_point_format(self) -> TargetConfig:
         if self.entry_point:
             parts = self.entry_point.split(":", 1)
-            if ":" not in self.entry_point or not parts[0] or not parts[1]:
+            if ":" not in self.entry_point or not parts[0] or not parts[1].isidentifier():
                 raise ValueError("entry_point must be in the form 'module.submodule:function'")
         return self
 

@@ -1,4 +1,4 @@
-## uv-pack validation guide
+## uv-bundler validation guide
 
 All commands assume the repo root unless stated otherwise.
 
@@ -6,7 +6,7 @@ All commands assume the repo root unless stated otherwise.
 
 ## Samples
 
-Three samples demonstrate different uv-pack capabilities:
+Three samples demonstrate different uv-bundler capabilities:
 
 | Sample             | Format(s)     | Deps                   | Showcases                                        |
 |--------------------|---------------|------------------------|--------------------------------------------------|
@@ -27,15 +27,15 @@ Three samples demonstrate different uv-pack capabilities:
 make setup
 
 # Dry-run against each sample
-cd validation/samples/single-spark-job && uv-pack --dry-run
-cd validation/samples/numpy-etl        && uv-pack --dry-run
-cd validation/samples/lambda-zip       && uv-pack --dry-run
+cd validation/samples/single-spark-job && uv-bundler --dry-run
+cd validation/samples/numpy-etl        && uv-bundler --dry-run
+cd validation/samples/lambda-zip       && uv-bundler --dry-run
 ```
 
 Expected output for single-spark-job:
 
 ```
-uv-pack dry run
+uv-bundler dry run
 - target: spark-jar
 - format: jar
 - entry_point: app.main:run
@@ -47,26 +47,26 @@ uv-pack dry run
 
 ## Phase 2 – build artifacts locally (no Docker required)
 
-uv-pack uses Ghost Resolution — `uv pip compile` and `uv pip install --python-platform`
+uv-bundler uses Ghost Resolution — `uv pip compile` and `uv pip install --python-platform`
 resolve and download the correct target-platform wheels on any host OS. No Docker or
 Linux build environment is needed to produce Linux artifacts from macOS or Windows.
 
 ```bash
 # single-spark-job — all three formats for linux/x86_64
 cd validation/samples/single-spark-job
-uv-pack --target spark-jar
-uv-pack --target spark-zip
-uv-pack --target spark-pex
+uv-bundler --target spark-jar
+uv-bundler --target spark-zip
+uv-bundler --target spark-pex
 
 # numpy-etl — PEX for x86_64 and aarch64 (Ghost Resolution fetches the right arch wheel)
 cd validation/samples/numpy-etl
-uv-pack --target etl-x86_64
-uv-pack --target etl-aarch64
+uv-bundler --target etl-x86_64
+uv-bundler --target etl-aarch64
 
 # lambda-zip — ZIP for x86_64 and Lambda Graviton (aarch64)
 cd validation/samples/lambda-zip
-uv-pack --target lambda-x86_64
-uv-pack --target lambda-aarch64
+uv-bundler --target lambda-x86_64
+uv-bundler --target lambda-aarch64
 ```
 
 Artifacts land in each sample's `dist/` directory:

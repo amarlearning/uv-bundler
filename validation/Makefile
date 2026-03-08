@@ -1,4 +1,4 @@
-# Validate artifacts built by uv-pack by running them inside a Docker container.
+# Validate artifacts built by uv-bundler by running them inside a Docker container.
 # Set TARGET_ARCH=aarch64 to validate ARM artifacts (requires aarch64 host or emulation).
 #
 # Usage:

@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from zipfile import ZipFile
 
-from uv_pack.adapters.fs import clean_staging, create_staging
-from uv_pack.domain.config import TargetConfig
-from uv_pack.services.packager import build_zip
-from uv_pack.services.staging import make_staging_paths
+from uv_bundler.adapters.fs import clean_staging, create_staging
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.services.packager import build_zip
+from uv_bundler.services.staging import make_staging_paths
 
 
 def test_zip_packager_integration(tmp_path: Path) -> None:

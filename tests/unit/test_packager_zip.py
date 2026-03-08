@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-from uv_pack.domain.config import TargetConfig
-from uv_pack.services.packager import build_zip
-from uv_pack.services.staging import StagingPaths
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.services.packager import build_zip
+from uv_bundler.services.staging import StagingPaths
 
 
 def make_staging(tmp_path: Path) -> StagingPaths:

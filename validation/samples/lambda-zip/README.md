@@ -1,6 +1,6 @@
 # lambda-zip
 
-Demonstrates uv-pack building a self-contained AWS Lambda ZIP for both x86_64 and
+Demonstrates uv-bundler building a self-contained AWS Lambda ZIP for both x86_64 and
 aarch64 (Graviton) from any host OS.
 
 ## What this showcases
@@ -9,11 +9,11 @@ AWS Lambda supports ARM-based Graviton processors, which offer better price-perf
 than x86_64. Switching to Graviton means your build pipeline must produce `aarch64`
 artifacts — hard if your CI is locked to Intel runners.
 
-uv-pack's Ghost Resolution builds the correct `linux/aarch64` ZIP from any host:
+uv-bundler's Ghost Resolution builds the correct `linux/aarch64` ZIP from any host:
 
 ```bash
 # From a macOS laptop or x86_64 CI runner
-uv-pack --target lambda-aarch64
+uv-bundler --target lambda-aarch64
 # → dist/lambda-zip-linux-aarch64.zip  (ready for Lambda Graviton)
 ```
 
@@ -29,7 +29,7 @@ validation/samples/lambda-zip/
     __init__.py
     handler.py   # AWS Lambda handler(event, context) — the actual Lambda entrypoint
     utils.py     # event normalisation
-    main.py      # run() — smoke-test entry point used by uv-pack bootstrap
+    main.py      # run() — smoke-test entry point used by uv-bundler bootstrap
 ```
 
 ## Targets
@@ -45,13 +45,13 @@ validation/samples/lambda-zip/
 cd validation/samples/lambda-zip
 
 # Verify config
-uv-pack --dry-run
+uv-bundler --dry-run
 
 # Standard Lambda (x86_64)
-uv-pack --target lambda-x86_64
+uv-bundler --target lambda-x86_64
 
 # Lambda Graviton — built from any host via Ghost Resolution
-uv-pack --target lambda-aarch64
+uv-bundler --target lambda-aarch64
 ```
 
 Artifacts land in `dist/`:
@@ -75,5 +75,5 @@ docker run --rm \
 ## Lambda deployment
 
 Deploy the ZIP to AWS Lambda with `lambda_jobs.handler.handler` as the handler string
-and `python3.10` runtime. The entry point for uv-pack (`lambda_jobs.main:run`) is only
+and `python3.10` runtime. The entry point for uv-bundler (`lambda_jobs.main:run`) is only
 used for local validation — the real Lambda handler is `handler.py:handler`.

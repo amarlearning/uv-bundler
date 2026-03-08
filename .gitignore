@@ -219,4 +219,4 @@ docs/IMPLEMENTATION_PLAN.md
 .venv_*
 validation/out/
 Validation/VALIDATION_PLAN.md
-validation/**/.uv-pack
+validation/**/.uv-bundler

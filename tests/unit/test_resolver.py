@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from uv_pack.domain.config import TargetConfig
-from uv_pack.services.resolver import (
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.services.resolver import (
     _pip_platform_tag,
     build_compile_cmd,
     build_install_cmd,
@@ -46,7 +46,7 @@ def _linux_target(**overrides: object) -> TargetConfig:
 
 def test_build_compile_cmd_linux() -> None:
     tgt = _linux_target()
-    cmd = build_compile_cmd(Path("pyproject.toml"), tgt, Path(".uv-pack/resolved.lock"))
+    cmd = build_compile_cmd(Path("pyproject.toml"), tgt, Path(".uv-bundler/resolved.lock"))
     assert cmd[:3] == ["uv", "pip", "compile"]
     assert "--python-platform" in cmd
     assert "x86_64-manylinux2014" in cmd
@@ -102,8 +102,8 @@ def test_compile_lockfile_propagates_runner_failure(tmp_path: Path) -> None:
 
 def test_build_install_cmd_structure() -> None:
     tgt = _linux_target()
-    lock = Path(".uv-pack/resolved.lock")
-    site = Path(".uv-pack/staging/site-packages")
+    lock = Path(".uv-bundler/resolved.lock")
+    site = Path(".uv-bundler/staging/site-packages")
     cmd = build_install_cmd(lock, tgt, site)
     assert cmd[:3] == ["uv", "pip", "install"]
     assert "-r" in cmd

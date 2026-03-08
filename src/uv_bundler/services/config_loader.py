@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from uv_pack.domain.config import GlobalConfig, TargetConfig, UvPackConfig
+from uv_bundler.domain.config import GlobalConfig, TargetConfig, UvPackConfig
 
 
 def _coerce_target(data: Mapping[str, Any]) -> TargetConfig:
@@ -35,7 +35,7 @@ def load_pyproject(path: Path) -> UvPackConfig:
     with path.open("rb") as f:
         raw = _toml.load(f)
     tool = raw.get("tool", {})
-    uvp = tool.get("uv-pack", {})
+    uvp = tool.get("uv-bundler", {})
     global_cfg = GlobalConfig(
         project_name=uvp.get("project_name"),
         default_target=uvp.get("default_target"),
@@ -48,7 +48,7 @@ def load_pyproject(path: Path) -> UvPackConfig:
     try:
         return UvPackConfig(global_config=global_cfg, targets=targets)
     except ValidationError as e:
-        raise ValueError(f"Invalid uv-pack configuration: {e}") from e
+        raise ValueError(f"Invalid uv-bundler configuration: {e}") from e
 
 
 def merge_overrides(target: TargetConfig, overrides: Mapping[str, Any]) -> TargetConfig:

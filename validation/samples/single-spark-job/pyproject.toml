@@ -1,18 +1,18 @@
 [project]
 name = "single-spark-job"
 version = "0.1.0"
-description = "Single Spark job example for uv-pack"
+description = "Single Spark job example for uv-bundler"
 requires-python = ">=3.10"
 dependencies = [
   "pyspark==3.5",
 ]
 
-[tool.uv-pack]
+[tool.uv-bundler]
 project_name = "single-spark-job"
 default_target = "spark-jar"
 output_base = "./dist"
 
-[tool.uv-pack.targets.spark-jar]
+[tool.uv-bundler.targets.spark-jar]
 format = "jar"
 entry_point = "app.main:run"
 platform = "linux"
@@ -21,7 +21,7 @@ python_version = "3.10"
 manylinux = "2014"
 compression = "deflated"
 
-[tool.uv-pack.targets.spark-zip]
+[tool.uv-bundler.targets.spark-zip]
 format = "zip"
 entry_point = "app.main:run"
 platform = "linux"
@@ -29,7 +29,7 @@ arch = "x86_64"
 python_version = "3.10"
 manylinux = "2014"
 
-[tool.uv-pack.targets.spark-pex]
+[tool.uv-bundler.targets.spark-pex]
 format = "pex"
 entry_point = "app.main:run"
 platform = "linux"

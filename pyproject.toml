@@ -3,7 +3,7 @@ requires = ["setuptools>=67", "wheel", "setuptools-scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "uv-pack"
+name = "uv-bundler"
 dynamic = ["version"]
 description = "Universal cross-platform Python packager powered by uv"
 readme = "README.md"
@@ -29,22 +29,22 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/amarlearning/uv-pack"
-Repository = "https://github.com/amarlearning/uv-pack"
+Homepage = "https://github.com/amarlearning/uv-bundler"
+Repository = "https://github.com/amarlearning/uv-bundler"
 
 [project.scripts]
-uv-pack = "uv_pack.cli:app"
+uv-bundler = "uv_bundler.cli:app"
 
 [tool.setuptools.package-data]
-uv_pack = ["py.typed"]
+uv_bundler = ["py.typed"]
 
 [tool.pytest.ini_options]
-addopts = "-q --cov=uv_pack --cov-report=term-missing"
+addopts = "-q --cov=uv_bundler --cov-report=term-missing"
 testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["src/uv_pack"]
+source = ["src/uv_bundler"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -62,7 +62,7 @@ ignore = ["E501", "PLR0913"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
-"src/uv_pack/adapters/process.py" = ["S603"]
+"src/uv_bundler/adapters/process.py" = ["S603"]
 "validation/validate_artifacts.py" = ["S603"]
 
 [tool.black]

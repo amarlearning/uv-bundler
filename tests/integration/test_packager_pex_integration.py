@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from uv_pack.adapters.fs import clean_staging, create_staging
-from uv_pack.services.packager import build_pex
-from uv_pack.services.staging import make_staging_paths
+from uv_bundler.adapters.fs import clean_staging, create_staging
+from uv_bundler.services.packager import build_pex
+from uv_bundler.services.staging import make_staging_paths
 
 """
 This test uses a stubbed runner and does not require pex to be installed.

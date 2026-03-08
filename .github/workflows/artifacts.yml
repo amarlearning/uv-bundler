@@ -12,9 +12,9 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # ── Build the uv-pack distribution wheel ─────────────────────────────────
+  # ── Build the uv-bundler distribution wheel ─────────────────────────────────
   build-wheel:
-    name: Build uv-pack wheel
+    name: Build uv-bundler wheel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,8 +26,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: uv-pack-wheel
-          path: dist/uv_pack-*-py3-none-any.whl
+          name: uv-bundler-wheel
+          path: dist/uv_bundler-*-py3-none-any.whl
           retention-days: 1
 
   # ── Cross-platform artifact builds ───────────────────────────────────────
@@ -60,17 +60,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download uv-pack wheel
+      - name: Download uv-bundler wheel
         uses: actions/download-artifact@v4
         with:
-          name: uv-pack-wheel
+          name: uv-bundler-wheel
           path: dist
 
-      # uv must be on PATH so uv-pack can invoke `uv pip compile/install`
+      # uv must be on PATH so uv-bundler can invoke `uv pip compile/install`
       - uses: astral-sh/setup-uv@v5
 
-      - name: Install uv-pack and pex
-        run: pip install dist/uv_pack-*.whl pex
+      - name: Install uv-bundler and pex
+        run: pip install dist/uv_bundler-*.whl pex
 
       # PEX caches downloaded wheels in ~/.pex; key by arch + all PEX sample pyproject hashes
       - name: Cache PEX downloads
@@ -87,9 +87,9 @@ jobs:
           OUT_DIR: ${{ github.workspace }}/artifacts
         run: |
           mkdir -p "$OUT_DIR"
-          uv-pack --target spark-jar --arch ${{ matrix.target-arch }}
-          uv-pack --target spark-zip --arch ${{ matrix.target-arch }}
-          uv-pack --target spark-pex --arch ${{ matrix.target-arch }}
+          uv-bundler --target spark-jar --arch ${{ matrix.target-arch }}
+          uv-bundler --target spark-zip --arch ${{ matrix.target-arch }}
+          uv-bundler --target spark-pex --arch ${{ matrix.target-arch }}
 
       # ── numpy-etl (PEX — C extensions require PEX, not JAR/ZIP) ──────────
       - name: Build numpy-etl for linux/${{ matrix.target-arch }}
@@ -97,7 +97,7 @@ jobs:
         env:
           OUT_DIR: ${{ github.workspace }}/artifacts
         run: |
-          uv-pack --target etl-${{ matrix.target-arch }}
+          uv-bundler --target etl-${{ matrix.target-arch }}
 
       # ── lambda-zip (ZIP — pure Python boto3, Lambda deployment format) ────
       - name: Build lambda-zip for linux/${{ matrix.target-arch }}
@@ -105,7 +105,7 @@ jobs:
         env:
           OUT_DIR: ${{ github.workspace }}/artifacts
         run: |
-          uv-pack --target lambda-${{ matrix.target-arch }}
+          uv-bundler --target lambda-${{ matrix.target-arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

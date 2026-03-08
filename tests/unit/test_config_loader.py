@@ -4,20 +4,20 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from uv_pack.services import config_loader
-from uv_pack.services.config_loader import load_pyproject, merge_overrides
+from uv_bundler.services import config_loader
+from uv_bundler.services.config_loader import load_pyproject, merge_overrides
 
 
 def write_pyproject(tmp_path: Path, content: str | None = None) -> Path:
     if content is None:
         content = textwrap.dedent(
             """
-            [tool.uv-pack]
+            [tool.uv-bundler]
             project_name = "demo"
             default_target = "spark-prod"
             output_base = "./dist"
 
-            [tool.uv-pack.targets.spark-prod]
+            [tool.uv-bundler.targets.spark-prod]
             format = "jar"
             entry_point = "app.main:run"
             platform = "linux"
@@ -53,29 +53,29 @@ def test_load_pyproject_missing_file_raises(tmp_path: Path) -> None:
 
 
 def test_load_pyproject_wraps_pydantic_validation_errors(tmp_path: Path, monkeypatch) -> None:
-    def failing_uv_pack_config(*args, **kwargs):
+    def failing_uv_bundler_config(*args, **kwargs):
         raise ValidationError.from_exception_data("UvPackConfig", [])
 
-    monkeypatch.setattr(config_loader, "UvPackConfig", failing_uv_pack_config)
+    monkeypatch.setattr(config_loader, "UvPackConfig", failing_uv_bundler_config)
     path = write_pyproject(tmp_path)
     with pytest.raises(ValueError) as exc:
         load_pyproject(path)
-    assert "Invalid uv-pack configuration" in str(exc.value)
+    assert "Invalid uv-bundler configuration" in str(exc.value)
 
 
 def test_load_pyproject_with_multiple_targets(tmp_path: Path) -> None:
     content = textwrap.dedent(
         """
-        [tool.uv-pack]
+        [tool.uv-bundler]
         default_target = "spark-jar"
 
-        [tool.uv-pack.targets.spark-jar]
+        [tool.uv-bundler.targets.spark-jar]
         format = "jar"
         entry_point = "app.main:run"
         platform = "linux"
         arch = "x86_64"
 
-        [tool.uv-pack.targets.spark-pex]
+        [tool.uv-bundler.targets.spark-pex]
         format = "pex"
         entry_point = "app.main:run"
         platform = "linux"
@@ -100,8 +100,8 @@ def test_load_pyproject_global_config_fields(tmp_path: Path) -> None:
     assert cfg.global_config.output_base == "./dist"
 
 
-def test_load_pyproject_missing_uv_pack_section_returns_empty_config(tmp_path: Path) -> None:
-    """A pyproject.toml without [tool.uv-pack] should produce an empty config."""
+def test_load_pyproject_missing_uv_bundler_section_returns_empty_config(tmp_path: Path) -> None:
+    """A pyproject.toml without [tool.uv-bundler] should produce an empty config."""
     content = "[project]\nname = 'x'\nversion = '0.1.0'\n"
     path = write_pyproject(tmp_path, content)
     cfg = load_pyproject(path)

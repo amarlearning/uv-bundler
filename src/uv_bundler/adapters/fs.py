@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 
-from uv_pack.services.staging import StagingPaths
+from uv_bundler.services.staging import StagingPaths
 
 
 def create_staging(paths: StagingPaths) -> None:

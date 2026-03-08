@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from uv_pack.adapters import process
+from uv_bundler.adapters import process
 
 
 def test_run_invokes_subprocess(tmp_path, monkeypatch) -> None:

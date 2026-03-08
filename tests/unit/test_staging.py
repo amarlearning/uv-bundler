@@ -1,5 +1,5 @@
-from uv_pack.adapters.fs import clean_staging, create_staging
-from uv_pack.services.staging import make_staging_paths
+from uv_bundler.adapters.fs import clean_staging, create_staging
+from uv_bundler.services.staging import make_staging_paths
 
 
 def test_create_and_clean_staging(tmp_path) -> None:

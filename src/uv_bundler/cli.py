@@ -6,19 +6,19 @@ from pathlib import Path
 
 import typer
 
-from uv_pack.adapters.fs import clean_staging, create_staging
-from uv_pack.adapters.process import run as process_run
-from uv_pack.domain.config import (
+from uv_bundler.adapters.fs import clean_staging, create_staging
+from uv_bundler.adapters.process import run as process_run
+from uv_bundler.domain.config import (
     TargetConfig,
     UvPackConfig,
     assert_module_path_exists,
 )
-from uv_pack.services.config_loader import load_pyproject, merge_overrides
-from uv_pack.services.packager import build_jar, build_pex, build_zip
-from uv_pack.services.resolver import compile_lockfile, install_dependencies
-from uv_pack.services.staging import StagingPaths, make_staging_paths
+from uv_bundler.services.config_loader import load_pyproject, merge_overrides
+from uv_bundler.services.packager import build_jar, build_pex, build_zip
+from uv_bundler.services.resolver import compile_lockfile, install_dependencies
+from uv_bundler.services.staging import StagingPaths, make_staging_paths
 
-app = typer.Typer(help="uv-pack: Universal cross-platform Python packager powered by uv")
+app = typer.Typer(help="uv-bundler: Universal cross-platform Python packager powered by uv")
 
 
 # Root-level files that are always build/project metadata, never runtime sources.
@@ -46,7 +46,7 @@ def _is_excluded(rel_posix: str, patterns: list[str]) -> bool:
 
 
 def _stage_sources(project_root: Path, dest: Path, exclude: list[str] | None = None) -> None:
-    skip_dirs = {".uv-pack", ".venv", ".venv_validation", "dist", "out", "__pycache__"}
+    skip_dirs = {".uv-bundler", ".venv", ".venv_validation", "dist", "out", "__pycache__"}
     extra_excludes = list(exclude or [])
 
     for child in project_root.iterdir():
@@ -147,7 +147,7 @@ def build(
     assert_module_path_exists(Path.cwd(), tgt.entry_point)
 
     if dry_run:
-        typer.echo("uv-pack dry run")
+        typer.echo("uv-bundler dry run")
         typer.echo(f"- target: {target or cfg.global_config.default_target}")
         typer.echo(f"- format: {tgt.format}")
         typer.echo(f"- entry_point: {tgt.entry_point}")
@@ -157,7 +157,7 @@ def build(
 
     if not tgt.format or not tgt.entry_point:
         raise typer.Exit(code=1)
-    staging_base = Path(".uv-pack").resolve()
+    staging_base = Path(".uv-bundler").resolve()
     paths = make_staging_paths(staging_base)
     clean_staging(paths)
     create_staging(paths)

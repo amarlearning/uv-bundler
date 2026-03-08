@@ -5,9 +5,9 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 import pytest
 
-from uv_pack.domain.config import TargetConfig
-from uv_pack.services.packager import build_jar
-from uv_pack.services.staging import StagingPaths
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.services.packager import build_jar
+from uv_bundler.services.staging import StagingPaths
 
 
 def make_staging(tmp_path: Path) -> StagingPaths:
@@ -46,7 +46,7 @@ def test_build_jar_manifest_content(tmp_path: Path) -> None:
     with ZipFile(out) as zf:
         manifest = zf.read("META-INF/MANIFEST.MF").decode()
     assert "Manifest-Version: 1.0" in manifest
-    assert "uv-pack" in manifest
+    assert "uv-bundler" in manifest
 
 
 def test_build_jar_bootstrap_contains_entry_point(tmp_path: Path) -> None:

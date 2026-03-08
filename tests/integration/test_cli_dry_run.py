@@ -3,7 +3,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from uv_pack.cli import app
+from uv_bundler.cli import app
 
 
 def test_build_dry_run_with_minimal_project(tmp_path: Path, monkeypatch) -> None:
@@ -14,10 +14,10 @@ def test_build_dry_run_with_minimal_project(tmp_path: Path, monkeypatch) -> None
 
     pyproject = textwrap.dedent(
         """
-        [tool.uv-pack]
+        [tool.uv-bundler]
         default_target = "spark-prod"
 
-        [tool.uv-pack.targets.spark-prod]
+        [tool.uv-bundler.targets.spark-prod]
         format = "jar"
         entry_point = "app.main:run"
         platform = "linux"
@@ -35,7 +35,7 @@ def test_build_dry_run_with_minimal_project(tmp_path: Path, monkeypatch) -> None
     # Debug output for easier failure diagnosis
     print(result.output)
     assert result.exit_code == 0
-    assert "uv-pack dry run" in result.stdout
+    assert "uv-bundler dry run" in result.stdout
     assert "format: jar" in result.stdout
     assert "entry_point: app.main:run" in result.stdout
 
@@ -52,10 +52,10 @@ def test_build_without_dry_run_builds_artifact(tmp_path: Path, monkeypatch) -> N
         version = "0.1.0"
         dependencies = []
 
-        [tool.uv-pack]
+        [tool.uv-bundler]
         default_target = "spark-prod"
 
-        [tool.uv-pack.targets.spark-prod]
+        [tool.uv-bundler.targets.spark-prod]
         format = "jar"
         entry_point = "app.main:run"
         platform = "linux"

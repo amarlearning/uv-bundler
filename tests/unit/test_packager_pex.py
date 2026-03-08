@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from uv_pack.domain.config import TargetConfig
-from uv_pack.services.packager import _pex_platform_tag, build_pex, build_pex_command
-from uv_pack.services.staging import StagingPaths
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.services.packager import _pex_platform_tag, build_pex, build_pex_command
+from uv_bundler.services.staging import StagingPaths
 
 
 def make_staging(tmp_path: Path) -> StagingPaths:

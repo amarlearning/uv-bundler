@@ -69,7 +69,7 @@ test: ensure-sync
 
 .PHONY: cov
 cov: ensure-sync
-	UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) run pytest -q --cov=uv_pack --cov-report=term-missing
+	UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) run pytest -q --cov=uv_bundler --cov-report=term-missing
 
 .PHONY: bench
 bench: ensure-sync

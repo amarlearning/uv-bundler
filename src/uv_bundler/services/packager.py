@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-from uv_pack.domain.config import TargetConfig
-from uv_pack.services.bootstrap import render_bootstrap
-from uv_pack.services.resolver import Runner
-from uv_pack.services.staging import StagingPaths
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.services.bootstrap import render_bootstrap
+from uv_bundler.services.resolver import Runner
+from uv_bundler.services.staging import StagingPaths
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,7 @@ def _compression_mode(target: TargetConfig) -> int:
 
 
 def _write_manifest(zf: ZipFile) -> None:
-    content = "Manifest-Version: 1.0\nCreated-By: uv-pack\n\n"
+    content = "Manifest-Version: 1.0\nCreated-By: uv-bundler\n\n"
     zf.writestr("META-INF/MANIFEST.MF", content)
 
 

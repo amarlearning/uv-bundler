@@ -1,9 +1,9 @@
 import time
 from pathlib import Path
 
-from uv_pack.domain.config import TargetConfig
-from uv_pack.services.packager import build_jar
-from uv_pack.services.staging import StagingPaths
+from uv_bundler.domain.config import TargetConfig
+from uv_bundler.services.packager import build_jar
+from uv_bundler.services.staging import StagingPaths
 
 
 def make_large_staging(tmp_path: Path, count: int) -> StagingPaths:
