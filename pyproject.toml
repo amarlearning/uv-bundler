@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
 authors = [
-  { name = "uv-pack maintainers" }
+  { name = "Amar Prakash Pandey", email = "amar.om1994@gmail.com" }
 ]
 keywords = ["packaging", "pex", "jar", "zip", "uv", "cross-platform"]
 classifiers = [
