@@ -25,6 +25,8 @@ class TargetConfig(BaseModel):
     compression: str | None = None
     exclude: list[str] = Field(default_factory=list)
     extra_files: dict[str, str] = Field(default_factory=dict)
+    slim: bool = False
+    slim_exclude: list[str] = Field(default_factory=list)
 
     model_config = {"frozen": True}
 
@@ -63,6 +65,8 @@ class UvPackConfig(BaseModel):
             compression=tgt.compression,
             exclude=tgt.exclude or [],
             extra_files=tgt.extra_files or {},
+            slim=tgt.slim,
+            slim_exclude=tgt.slim_exclude or [],
         )
 
 

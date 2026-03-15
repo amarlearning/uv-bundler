@@ -40,6 +40,38 @@ def test_build_dry_run_with_minimal_project(tmp_path: Path, monkeypatch) -> None
     assert "entry_point: app.main:run" in result.stdout
 
 
+def test_build_dry_run_slim_shows_slim_flag(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "main.py").write_text("def run():\n    return 'ok'\n")
+
+    pyproject = textwrap.dedent(
+        """
+        [tool.uv-bundler]
+        default_target = "spark-prod"
+
+        [tool.uv-bundler.targets.spark-prod]
+        format = "jar"
+        entry_point = "app.main:run"
+        platform = "linux"
+        arch = "x86_64"
+        python_version = "3.10"
+        manylinux = "2014"
+        slim = true
+        slim_exclude = ["tests/**"]
+        """
+    ).strip()
+    (tmp_path / "pyproject.toml").write_text(pyproject)
+    monkeypatch.chdir(tmp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["--dry-run"])
+    assert result.exit_code == 0
+    assert "slim: True" in result.stdout
+    assert "slim_exclude" in result.stdout
+    assert "tests/**" in result.stdout
+
+
 def test_build_without_dry_run_builds_artifact(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("")

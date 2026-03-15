@@ -133,3 +133,47 @@ def test_target_config_extra_files_default_empty() -> None:
 def test_target_config_exclude_default_empty() -> None:
     tgt = TargetConfig()
     assert tgt.exclude == []
+
+
+# ── slim / slim_exclude ───────────────────────────────────────────────────────
+
+
+def test_slim_defaults_to_false() -> None:
+    tgt = TargetConfig()
+    assert tgt.slim is False
+
+
+def test_slim_exclude_defaults_to_empty() -> None:
+    tgt = TargetConfig()
+    assert tgt.slim_exclude == []
+
+
+def test_slim_and_slim_exclude_set() -> None:
+    tgt = TargetConfig(slim=True, slim_exclude=["*.pyi", "tests/**"])
+    assert tgt.slim is True
+    assert tgt.slim_exclude == ["*.pyi", "tests/**"]
+
+
+def test_resolve_target_passes_through_slim_fields() -> None:
+    global_cfg = GlobalConfig(default_target="t")
+    target = TargetConfig(
+        format="jar",
+        entry_point="app.main:run",
+        slim=True,
+        slim_exclude=["*.pyi"],
+    )
+    cfg = UvPackConfig(global_config=global_cfg, targets={"t": target})
+    resolved = cfg.resolve_target(None)
+    assert resolved.slim is True
+    assert resolved.slim_exclude == ["*.pyi"]
+
+
+def test_resolve_target_slim_defaults_false_when_not_set() -> None:
+    global_cfg = GlobalConfig(default_target="t")
+    cfg = UvPackConfig(
+        global_config=global_cfg,
+        targets={"t": TargetConfig(format="jar", entry_point="app.main:run")},
+    )
+    resolved = cfg.resolve_target(None)
+    assert resolved.slim is False
+    assert resolved.slim_exclude == []

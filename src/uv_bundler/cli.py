@@ -89,12 +89,52 @@ def _output_root(pyproject: Path, cfg: UvPackConfig) -> Path:
     return (pyproject.parent / base).resolve()
 
 
-def _artifact_path(out_root: Path, cfg: UvPackConfig, tgt: TargetConfig, suffix: str) -> Path:
+def _artifact_path(
+    out_root: Path, cfg: UvPackConfig, tgt: TargetConfig, suffix: str, slim: bool = False
+) -> Path:
     base_name = cfg.global_config.project_name or "app"
     platform = tgt.platform or "unknown-os"
     arch = tgt.arch or "unknown-arch"
-    name = f"{base_name}-{str(platform).lower()}-{str(arch).lower()}{suffix}"
+    slim_tag = "-slim" if slim else ""
+    name = f"{base_name}-{str(platform).lower()}-{str(arch).lower()}{slim_tag}{suffix}"
     return out_root / name
+
+
+def _assemble(
+    paths: StagingPaths,
+    staging_base: Path,
+    tgt: TargetConfig,
+    out_root: Path,
+    cfg: UvPackConfig,
+    effective_slim: bool,
+    pyproject: Path,
+) -> None:
+    """Dispatch to the correct packager and echo the output path."""
+    if tgt.format == "jar":
+        output = _artifact_path(out_root, cfg, tgt, ".jar", slim=effective_slim)
+        build_jar(paths, tgt.entry_point or "", tgt, output, project_root=pyproject.parent)
+        typer.echo(str(output))
+    elif tgt.format == "zip":
+        output = _artifact_path(out_root, cfg, tgt, ".zip", slim=effective_slim)
+        build_zip(paths, tgt.entry_point or "", tgt, output, project_root=pyproject.parent)
+        typer.echo(str(output))
+    elif tgt.format == "pex":
+        output = _artifact_path(out_root, cfg, tgt, ".pex", slim=effective_slim)
+        # In slim mode the lock file is never created; build_pex_command skips -r automatically
+        lock_file = staging_base / "resolved.lock"
+        code = build_pex(
+            paths,
+            tgt.entry_point or "",
+            output,
+            process_run,
+            lock_file=lock_file if not effective_slim else None,
+            target=tgt,
+        )
+        if code != 0:
+            raise typer.Exit(code=code)
+        typer.echo(str(output))
+    else:
+        raise typer.Exit(code=1)
 
 
 def _resolve_and_install(
@@ -127,6 +167,9 @@ def build(
     platform: str | None = typer.Option(None, help="Override target platform"),
     python_version: str | None = typer.Option(None, help="Override Python version"),
     manylinux: str | None = typer.Option(None, help="Override manylinux version"),
+    slim: bool = typer.Option(
+        False, "--slim", help="Build slim artifact (source only, no dependencies bundled)"
+    ),
 ) -> None:
     """
     Build artifacts for a target defined in pyproject.toml.
@@ -146,6 +189,9 @@ def build(
     )
     assert_module_path_exists(Path.cwd(), tgt.entry_point)
 
+    # CLI --slim takes precedence; falls back to config slim=true
+    effective_slim = slim or tgt.slim
+
     if dry_run:
         typer.echo("uv-bundler dry run")
         typer.echo(f"- target: {target or cfg.global_config.default_target}")
@@ -153,6 +199,9 @@ def build(
         typer.echo(f"- entry_point: {tgt.entry_point}")
         typer.echo(f"- platform: {tgt.platform}, arch: {tgt.arch}")
         typer.echo(f"- python: {tgt.python_version}, manylinux: {tgt.manylinux}")
+        typer.echo(f"- slim: {effective_slim}")
+        if effective_slim and tgt.slim_exclude:
+            typer.echo(f"- slim_exclude: {list(tgt.slim_exclude)}")
         return
 
     if not tgt.format or not tgt.entry_point:
@@ -163,33 +212,16 @@ def build(
     create_staging(paths)
 
     try:
-        _stage_sources(pyproject.parent, paths.sources, exclude=list(tgt.exclude))
-        _resolve_and_install(pyproject, tgt, paths, staging_base)
+        # In slim mode, merge slim_exclude on top of regular exclude patterns
+        all_excludes = list(tgt.exclude)
+        if effective_slim:
+            all_excludes.extend(tgt.slim_exclude)
+        _stage_sources(pyproject.parent, paths.sources, exclude=all_excludes)
+
+        if not effective_slim:
+            _resolve_and_install(pyproject, tgt, paths, staging_base)
 
         out_root = _output_root(pyproject, cfg)
-        if tgt.format == "jar":
-            output = _artifact_path(out_root, cfg, tgt, ".jar")
-            build_jar(paths, tgt.entry_point, tgt, output, project_root=pyproject.parent)
-            typer.echo(str(output))
-        elif tgt.format == "zip":
-            output = _artifact_path(out_root, cfg, tgt, ".zip")
-            build_zip(paths, tgt.entry_point, tgt, output, project_root=pyproject.parent)
-            typer.echo(str(output))
-        elif tgt.format == "pex":
-            output = _artifact_path(out_root, cfg, tgt, ".pex")
-            lock_file = staging_base / "resolved.lock"
-            code = build_pex(
-                paths,
-                tgt.entry_point,
-                output,
-                process_run,
-                lock_file=lock_file,
-                target=tgt,
-            )
-            if code != 0:
-                raise typer.Exit(code=code)
-            typer.echo(str(output))
-        else:
-            raise typer.Exit(code=1)
+        _assemble(paths, staging_base, tgt, out_root, cfg, effective_slim, pyproject)
     finally:
         clean_staging(paths)

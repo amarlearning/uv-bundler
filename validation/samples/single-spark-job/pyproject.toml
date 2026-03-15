@@ -36,3 +36,31 @@ platform = "linux"
 arch = "x86_64"
 python_version = "3.10"
 manylinux = "2014"
+
+[tool.uv-bundler.targets.spark-jar-slim]
+format = "jar"
+entry_point = "app.main:run"
+platform = "linux"
+arch = "x86_64"
+python_version = "3.10"
+manylinux = "2014"
+compression = "deflated"
+slim = true
+
+[tool.uv-bundler.targets.spark-zip-slim]
+format = "zip"
+entry_point = "app.main:run"
+platform = "linux"
+arch = "x86_64"
+python_version = "3.10"
+manylinux = "2014"
+slim = true
+
+[tool.uv-bundler.targets.spark-pex-slim]
+format = "pex"
+entry_point = "app.main:run"
+platform = "linux"
+arch = "x86_64"
+python_version = "3.10"
+manylinux = "2014"
+slim = true

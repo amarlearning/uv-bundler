@@ -142,3 +142,55 @@ def test_merge_overrides_partial_fields(tmp_path: Path) -> None:
     assert updated.arch == "aarch64"
     assert updated.python_version == "3.10"  # unchanged
     assert updated.platform == "linux"  # unchanged
+
+
+# ── slim / slim_exclude parsing ───────────────────────────────────────────────
+
+
+def test_load_pyproject_parses_slim_true(tmp_path: Path) -> None:
+    content = textwrap.dedent(
+        """
+        [tool.uv-bundler]
+        default_target = "t"
+
+        [tool.uv-bundler.targets.t]
+        format = "jar"
+        entry_point = "app.main:run"
+        platform = "linux"
+        arch = "x86_64"
+        slim = true
+        """
+    ).strip()
+    path = write_pyproject(tmp_path, content)
+    cfg = load_pyproject(path)
+    tgt = cfg.resolve_target("t")
+    assert tgt.slim is True
+
+
+def test_load_pyproject_parses_slim_exclude(tmp_path: Path) -> None:
+    content = textwrap.dedent(
+        """
+        [tool.uv-bundler]
+        default_target = "t"
+
+        [tool.uv-bundler.targets.t]
+        format = "jar"
+        entry_point = "app.main:run"
+        platform = "linux"
+        arch = "x86_64"
+        slim = true
+        slim_exclude = ["*.pyi", "tests/**"]
+        """
+    ).strip()
+    path = write_pyproject(tmp_path, content)
+    cfg = load_pyproject(path)
+    tgt = cfg.resolve_target("t")
+    assert tgt.slim_exclude == ["*.pyi", "tests/**"]
+
+
+def test_load_pyproject_slim_defaults_false(tmp_path: Path) -> None:
+    path = write_pyproject(tmp_path)
+    cfg = load_pyproject(path)
+    tgt = cfg.resolve_target("spark-prod")
+    assert tgt.slim is False
+    assert tgt.slim_exclude == []

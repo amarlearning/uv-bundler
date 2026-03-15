@@ -346,3 +346,153 @@ def test_cli_jar_artifact_is_valid_zip(tmp_path: Path, monkeypatch: pytest.Monke
     with ZipFile(jar) as zf:
         assert "__main__.py" in zf.namelist()
         assert "META-INF/MANIFEST.MF" in zf.namelist()
+
+
+# ── _artifact_path: slim suffix ────────────────────────────────────────────────
+
+
+def test_artifact_path_slim_adds_slim_suffix(tmp_path: Path) -> None:
+    cfg = UvPackConfig(global_config=GlobalConfig(project_name="my-job"))
+    tgt = TargetConfig(platform="linux", arch="x86_64")
+    path = _artifact_path(tmp_path, cfg, tgt, ".jar", slim=True)
+    assert path == tmp_path / "my-job-linux-x86_64-slim.jar"
+
+
+def test_artifact_path_no_slim_no_suffix(tmp_path: Path) -> None:
+    cfg = UvPackConfig(global_config=GlobalConfig(project_name="my-job"))
+    tgt = TargetConfig(platform="linux", arch="x86_64")
+    path = _artifact_path(tmp_path, cfg, tgt, ".jar", slim=False)
+    assert path == tmp_path / "my-job-linux-x86_64.jar"
+
+
+# ── CLI command: slim mode ─────────────────────────────────────────────────────
+
+
+def test_dry_run_shows_slim_false_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_minimal_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(app, ["--dry-run"])
+    assert result.exit_code == 0
+    assert "slim: False" in result.stdout
+
+
+def test_dry_run_shows_slim_true_when_flag_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_minimal_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(app, ["--dry-run", "--slim"])
+    assert result.exit_code == 0
+    assert "slim: True" in result.stdout
+
+
+def test_cli_slim_flag_skips_resolve_and_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--slim must not invoke the resolver (uv pip compile/install)."""
+    _write_minimal_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    calls: list[list[str]] = []
+
+    def tracking_run(args: list[str], **kwargs: object) -> int:
+        calls.append(args)
+        return 0
+
+    monkeypatch.setattr(_cli, "process_run", tracking_run)
+    runner = CliRunner()
+    result = runner.invoke(app, ["--slim"])
+    assert result.exit_code == 0
+    # No uv calls should have happened
+    assert all("uv" not in " ".join(a) for a in calls)
+
+
+def test_cli_slim_builds_jar_with_slim_suffix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_minimal_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _mock_uv_success(monkeypatch)
+    runner = CliRunner()
+    result = runner.invoke(app, ["--slim"])
+    assert result.exit_code == 0
+    dist = tmp_path / "dist"
+    slim_jars = list(dist.glob("*-slim.jar"))
+    assert len(slim_jars) == 1
+    assert "test-app-linux-x86_64-slim" in slim_jars[0].name
+
+
+def test_cli_slim_jar_has_no_site_packages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Slim JAR must not contain any site-packages/ entries."""
+    _write_minimal_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _mock_uv_success(monkeypatch)
+    runner = CliRunner()
+    runner.invoke(app, ["--slim"])
+    jar = next((tmp_path / "dist").glob("*-slim.jar"))
+    with ZipFile(jar) as zf:
+        names = zf.namelist()
+    assert not any(n.startswith("site-packages/") for n in names)
+    assert "app/main.py" in names
+
+
+def test_cli_slim_exclude_filters_source_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """slim_exclude patterns remove matching source files from the slim artifact."""
+    _write_minimal_project(tmp_path)
+    # Add a tests/ directory that slim_exclude should strip
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_main.py").write_text("def test_x(): pass\n")
+    # Rewrite pyproject with slim=true and slim_exclude targeting tests/
+    (tmp_path / "pyproject.toml").write_text(
+        textwrap.dedent(
+            """
+            [project]
+            name = "test-app"
+            version = "0.1.0"
+            dependencies = []
+
+            [tool.uv-bundler]
+            project_name = "test-app"
+            default_target = "spark-prod"
+
+            [tool.uv-bundler.targets.spark-prod]
+            format = "jar"
+            entry_point = "app.main:run"
+            platform = "linux"
+            arch = "x86_64"
+            python_version = "3.10"
+            manylinux = "2014"
+            slim = true
+            slim_exclude = ["tests/*"]
+            """
+        ).strip()
+    )
+    monkeypatch.chdir(tmp_path)
+    _mock_uv_success(monkeypatch)
+    runner = CliRunner()
+    result = runner.invoke(app, [])
+    assert result.exit_code == 0
+    jar = next((tmp_path / "dist").glob("*-slim.jar"))
+    with ZipFile(jar) as zf:
+        names = zf.namelist()
+    assert not any("tests/" in n for n in names)
+    assert "app/main.py" in names
+
+
+def test_cli_slim_flag_overrides_config_slim_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--slim CLI flag activates slim even when config has slim=false (default)."""
+    _write_minimal_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _mock_uv_success(monkeypatch)
+    runner = CliRunner()
+    result = runner.invoke(app, ["--slim"])
+    assert result.exit_code == 0
+    dist = tmp_path / "dist"
+    assert any(p.name.endswith("-slim.jar") for p in dist.iterdir())

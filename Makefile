@@ -51,7 +51,7 @@ ensure-sync: ensure-uv
 
 .PHONY: fmt
 fmt: ensure-sync
-	UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) run ruff check --select I --fix .
+	UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) run ruff check --fix .
 	UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) run black .
 
 .PHONY: lint

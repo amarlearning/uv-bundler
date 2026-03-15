@@ -24,6 +24,8 @@ def _coerce_target(data: Mapping[str, Any]) -> TargetConfig:
         compression=data.get("compression"),
         exclude=list(data.get("exclude", [])),
         extra_files=dict(data.get("extra_files", {})),
+        slim=bool(data.get("slim", False)),
+        slim_exclude=list(data.get("slim_exclude", [])),
     )
 
 

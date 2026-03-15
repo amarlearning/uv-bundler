@@ -39,9 +39,10 @@ jobs:
   #   ubuntu-24.04-arm  (aarch64 host) → builds for linux/x86_64
   #
   # Samples and formats:
-  #   single-spark-job  JAR + ZIP + PEX   pyspark (pure Python)
-  #   numpy-etl         PEX               numpy + pandas (C extensions — PEX extracts .so to disk)
-  #   lambda-zip        ZIP               boto3 (pure Python, Lambda deployment format)
+  #   single-spark-job  JAR + ZIP + PEX              pyspark (pure Python) — fat
+  #   single-spark-job  JAR + ZIP + PEX (slim)       source only, no deps bundled
+  #   numpy-etl         PEX                           numpy + pandas (C extensions — PEX extracts .so to disk)
+  #   lambda-zip        ZIP                           boto3 (pure Python, Lambda deployment format)
   #
   build-linux:
     name: Build linux/${{ matrix.target-arch }} on ${{ matrix.runner-arch }}
@@ -80,7 +81,7 @@ jobs:
           key: pex-linux-${{ matrix.target-arch }}-${{ hashFiles('validation/samples/single-spark-job/pyproject.toml', 'validation/samples/numpy-etl/pyproject.toml') }}
           restore-keys: pex-linux-${{ matrix.target-arch }}-
 
-      # ── single-spark-job (JAR + ZIP + PEX) ───────────────────────────────
+      # ── single-spark-job fat (JAR + ZIP + PEX) ───────────────────────────
       - name: Build single-spark-job for linux/${{ matrix.target-arch }}
         working-directory: validation/samples/single-spark-job
         env:
@@ -90,6 +91,16 @@ jobs:
           uv-bundler --target spark-jar --arch ${{ matrix.target-arch }}
           uv-bundler --target spark-zip --arch ${{ matrix.target-arch }}
           uv-bundler --target spark-pex --arch ${{ matrix.target-arch }}
+
+      # ── single-spark-job slim (JAR + ZIP + PEX — source only, no deps) ───
+      - name: Build slim single-spark-job for linux/${{ matrix.target-arch }}
+        working-directory: validation/samples/single-spark-job
+        env:
+          OUT_DIR: ${{ github.workspace }}/artifacts
+        run: |
+          uv-bundler --target spark-jar-slim --arch ${{ matrix.target-arch }}
+          uv-bundler --target spark-zip-slim --arch ${{ matrix.target-arch }}
+          uv-bundler --target spark-pex-slim --arch ${{ matrix.target-arch }}
 
       # ── numpy-etl (PEX — C extensions require PEX, not JAR/ZIP) ──────────
       - name: Build numpy-etl for linux/${{ matrix.target-arch }}
@@ -113,6 +124,7 @@ jobs:
           name: artifacts-linux-${{ matrix.target-arch }}
           path: |
             artifacts/single-spark-job-linux-${{ matrix.target-arch }}.*
+            artifacts/single-spark-job-linux-${{ matrix.target-arch }}-slim.*
             artifacts/numpy-etl-linux-${{ matrix.target-arch }}.*
             artifacts/lambda-zip-linux-${{ matrix.target-arch }}.*
           retention-days: 7
@@ -124,6 +136,7 @@ jobs:
   #
   # Separate steps per format and sample so failures are immediately visible.
   # No packages are pre-installed: fat artifacts must be fully self-contained.
+  # Slim artifacts are validated for structure only (deps not bundled).
   #
   validate-linux:
     name: Validate linux/${{ matrix.target-arch }}
@@ -143,13 +156,15 @@ jobs:
       LAMBDA_STEM: lambda-zip-linux-${{ matrix.target-arch }}
       IMAGE: python:3.10-slim
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: artifacts-linux-${{ matrix.target-arch }}
           path: artifacts
 
-      # ── single-spark-job ─────────────────────────────────────────────────
+      # ── single-spark-job fat ──────────────────────────────────────────────
       - name: Run single-spark-job JAR in linux/${{ matrix.target-arch }} container
         run: |
           docker run --rm \
@@ -170,6 +185,15 @@ jobs:
             -v "${{ github.workspace }}/artifacts:/artifacts" \
             "$IMAGE" \
             sh -c "python /artifacts/$SPARK_STEM.pex | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+
+      # ── single-spark-job slim (structure only — deps not bundled) ─────────
+      - name: Validate slim artifact structure for linux/${{ matrix.target-arch }}
+        run: |
+          python validation/validate_artifacts.py \
+            --out-dir artifacts \
+            --target-os linux \
+            --target-arch ${{ matrix.target-arch }} \
+            --skip-runtime
 
       # ── numpy-etl (native numpy/pandas C extensions via PEX) ─────────────
       - name: Run numpy-etl PEX in linux/${{ matrix.target-arch }} container

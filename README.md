@@ -32,6 +32,13 @@ python my-spark-job-linux-x86_64.jar
 # Running single Spark job with pyspark 3.5.0
 ```
 
+When your runtime environment already has dependencies installed (EMR clusters, Lambda layers, Airflow workers), use **slim mode** to bundle source code only:
+
+```bash
+uv-bundler --target spark-prod --slim
+# → dist/my-spark-job-linux-x86_64-slim.jar
+```
+
 ---
 
 ## Quick start
@@ -93,10 +100,10 @@ Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directl
 `uv-bundler` follows a 5-step lifecycle:
 
 1. **Context hydration** — reads `pyproject.toml`, merges CLI overrides, validates the entry point module path.
-2. **Ghost Resolution** — runs `uv pip compile --python-platform <target>` to pin platform-specific wheel hashes for the *target* OS, not the build host.
-3. **Staging** — runs `uv pip install --target` to extract wheels into a staging directory alongside your source code.
+2. **Ghost Resolution** — runs `uv pip compile --python-platform <target>` to pin platform-specific wheel hashes for the *target* OS, not the build host. *(skipped in slim mode)*
+3. **Staging** — runs `uv pip install --target` to extract wheels into a staging directory alongside your source code. *(skipped in slim mode)*
 4. **Bootstrap generation** — generates a `__main__.py` that correctly loads `site-packages` at runtime, including when executed directly from inside a zip archive (zipapp mode).
-5. **Assembly** — bundles everything into the requested format.
+5. **Assembly** — bundles everything into the requested format. In slim mode, only source code is bundled — no `site-packages/`.
 
 ---
 
@@ -108,11 +115,13 @@ Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directl
 - Includes `META-INF/MANIFEST.MF` for JVM tooling compatibility
 - Dependencies bundled under `site-packages/` inside the archive
 - Build fails if `.dylib` or `.dll` binaries are detected (Linux targets only)
+- **Slim**: source only — use when pyspark/deps are pre-installed on the cluster
 
 ### ZIP — AWS Lambda / general deployment
 
 - Same internal layout as JAR (bootstrap + `site-packages/` + sources)
 - Suited for Lambda Layers and generic zip-based deployments
+- **Slim**: source only — use when a Lambda Layer already provides dependencies
 
 ### PEX — Airflow / schedulers
 
@@ -120,6 +129,7 @@ Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directl
 - Uses a platform tag (e.g. `manylinux2014_x86_64-cp-310-cp310`) for cross-platform resolution
 - First build downloads packages from PyPI; subsequent builds use the cache
 - Cache `$PEX_ROOT` (default `~/.pex`) in CI to avoid repeated downloads
+- **Slim**: source only — no `-r requirements` passed to pex; use when the runtime environment provides deps
 
 ---
 
@@ -145,6 +155,10 @@ manylinux = "2014"                    # "2010" | "2014" | numeric (e.g. "31")
 # Packaging
 compression = "deflated"              # "stored" | "deflated"
 
+# Slim mode — bundle source only, no dependencies
+slim = false                          # true = skip resolve+install, source only
+slim_exclude = ["tests/**", "*.pyi"] # additional patterns excluded from source in slim mode
+
 # Advanced
 exclude = ["tests/*", "**/__pycache__", "*.pyc", ".git*"]
 extra_files = { "config/prod.yaml" = "resources/config.yaml" }
@@ -165,8 +179,11 @@ Options:
   --arch TEXT             Override arch      (x86_64 | aarch64)
   --python-version TEXT   Override Python version (e.g. 3.10)
   --manylinux TEXT        Override manylinux tag  (e.g. 2014)
+  --slim                  Bundle source only — skip dependency resolution and installation
   --dry-run               Print resolved config without building
 ```
+
+`--slim` overrides `slim = false` in config. Slim artifacts are named with a `-slim` infix: `my-job-linux-x86_64-slim.jar`.
 
 ---
 

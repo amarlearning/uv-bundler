@@ -24,6 +24,20 @@ EXPECTED_PEX_PATHS = {
     ".bootstrap/pex/__main__.py",
 }
 
+# Slim artifacts: same source files, no site-packages/
+EXPECTED_SLIM_JAR_PATHS = {
+    "META-INF/MANIFEST.MF",
+    "__main__.py",
+    "app/main.py",
+    "app/__init__.py",
+}
+
+EXPECTED_SLIM_ZIP_PATHS = {
+    "__main__.py",
+    "app/main.py",
+    "app/__init__.py",
+}
+
 EXPECTED_LOG_SUBSTRING = "Running single Spark job with pyspark"
 
 
@@ -64,6 +78,36 @@ def validate_contents(base: Path, target_os: str, target_arch: str) -> list[str]
     else:
         members = load_members(pex)
         errors.extend(require_paths(members, EXPECTED_PEX_PATHS, "pex"))
+
+    return errors
+
+
+def validate_slim_contents(base: Path, target_os: str, target_arch: str) -> list[str]:
+    """Validate slim artifacts: must contain sources but no site-packages/ entries."""
+    errors: list[str] = []
+    stem = f"single-spark-job-{target_os}-{target_arch}-slim"
+    jar = base / f"{stem}.jar"
+    zip_app = base / f"{stem}.zip"
+    pex = base / f"{stem}.pex"
+
+    if not jar.exists():
+        errors.append(f"slim contents: missing slim JAR {jar}")
+    else:
+        members = load_members(jar)
+        errors.extend(require_paths(members, EXPECTED_SLIM_JAR_PATHS, "slim-jar"))
+        if any(m.startswith("site-packages/") for m in members):
+            errors.append("slim-jar: must not contain site-packages/ (slim mode)")
+
+    if not zip_app.exists():
+        errors.append(f"slim contents: missing slim ZIP {zip_app}")
+    else:
+        members = load_members(zip_app)
+        errors.extend(require_paths(members, EXPECTED_SLIM_ZIP_PATHS, "slim-zip"))
+        if any(m.startswith("site-packages/") for m in members):
+            errors.append("slim-zip: must not contain site-packages/ (slim mode)")
+
+    if not pex.exists():
+        errors.append(f"slim contents: missing slim PEX {pex}")
 
     return errors
 
@@ -119,6 +163,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--target-os", default="linux")
     parser.add_argument("--target-arch", default="x86_64")
+    parser.add_argument(
+        "--skip-slim",
+        action="store_true",
+        default=False,
+        help="Skip slim artifact validation",
+    )
+    parser.add_argument(
+        "--skip-runtime",
+        action="store_true",
+        default=False,
+        help="Skip runtime execution checks (content validation only)",
+    )
     return parser.parse_args(argv)
 
 
@@ -130,7 +186,12 @@ def main(argv: list[str] | None = None) -> int:
 
     errors: list[str] = []
     errors.extend(validate_contents(base, target_os, target_arch))
-    errors.extend(validate_runtime(base, target_os, target_arch))
+
+    if not ns.skip_runtime:
+        errors.extend(validate_runtime(base, target_os, target_arch))
+
+    if not ns.skip_slim:
+        errors.extend(validate_slim_contents(base, target_os, target_arch))
 
     if errors:
         for line in errors:
