@@ -17,14 +17,14 @@ jobs:
     name: Build uv-bundler wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: Build wheel
         run: uv build --wheel
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: uv-bundler-wheel
           path: dist/uv_bundler-*-py3-none-any.whl
@@ -59,23 +59,23 @@ jobs:
             target-arch: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download uv-bundler wheel
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: uv-bundler-wheel
           path: dist
 
       # uv must be on PATH so uv-bundler can invoke `uv pip compile/install`
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: Install uv-bundler and pex
         run: pip install dist/uv_bundler-*.whl pex
 
       # PEX caches downloaded wheels in ~/.pex; key by arch + all PEX sample pyproject hashes
       - name: Cache PEX downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.pex
           key: pex-linux-${{ matrix.target-arch }}-${{ hashFiles('validation/samples/single-spark-job/pyproject.toml', 'validation/samples/numpy-etl/pyproject.toml') }}
@@ -119,7 +119,7 @@ jobs:
           uv-bundler --target lambda-${{ matrix.target-arch }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: artifacts-linux-${{ matrix.target-arch }}
           path: |
@@ -156,10 +156,10 @@ jobs:
       LAMBDA_STEM: lambda-zip-linux-${{ matrix.target-arch }}
       IMAGE: python:3.10-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: artifacts-linux-${{ matrix.target-arch }}
           path: artifacts
