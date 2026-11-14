@@ -205,7 +205,7 @@ When adding a feature:
 - Commit: imperative mood, ≤ 50 chars subject line
 - Quality gate before opening PR: `make fmt && make lint && make type && make test`
 - Update `README.md` if user-visible behavior changes
-- Bump version in `src/uv_bundler/__init__.py` and `pyproject.toml` for releases
+- Release: push a `vX.Y.Z` tag. setuptools-scm derives the version from it and `release.yml` publishes to PyPI. `__version__` reads the installed metadata, so no files need bumping.
 
 ---
 
