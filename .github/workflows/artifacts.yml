@@ -32,11 +32,12 @@ jobs:
 
   # ── Cross-platform artifact builds ───────────────────────────────────────
   #
-  # Three samples are built per runner, each targeting the OPPOSITE arch from
-  # the runner to exercise Ghost Resolution (uv pip compile/install --python-platform):
+  # Three samples are built per runner, each targeting a platform the runner is
+  # NOT, to exercise Ghost Resolution (uv pip compile/install --python-platform):
   #
-  #   ubuntu-latest     (x86_64 host) → builds for linux/aarch64
-  #   ubuntu-24.04-arm  (aarch64 host) → builds for linux/x86_64
+  #   ubuntu-latest     (x86_64 host)        → builds for linux/aarch64
+  #   ubuntu-24.04-arm  (aarch64 host)       → builds for linux/x86_64
+  #   macos-latest      (Apple Silicon host) → builds for linux/x86_64 + linux/aarch64
   #
   # Samples and formats:
   #   single-spark-job  JAR + ZIP + PEX              pyspark (pure Python) — fat
@@ -45,18 +46,29 @@ jobs:
   #   lambda-zip        ZIP                           boto3 (pure Python, Lambda deployment format)
   #
   build-linux:
-    name: Build linux/${{ matrix.target-arch }} on ${{ matrix.runner-arch }}
+    name: Build linux/${{ matrix.target-arch }} on ${{ matrix.host }}/${{ matrix.runner-arch }}
     needs: build-wheel
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest        # x86_64 host → aarch64 target
+            host: linux
             runner-arch: x86_64
             target-arch: aarch64
           - runner: ubuntu-24.04-arm     # aarch64 host → x86_64 target
+            host: linux
             runner-arch: aarch64
             target-arch: x86_64
+          # The headline use case: Linux artifacts built on a Mac.
+          - runner: macos-latest
+            host: macos
+            runner-arch: aarch64
+            target-arch: x86_64
+          - runner: macos-latest
+            host: macos
+            runner-arch: aarch64
+            target-arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -70,16 +82,20 @@ jobs:
       # uv must be on PATH so uv-bundler can invoke `uv pip compile/install`
       - uses: astral-sh/setup-uv@v7
 
+      # uv tool install behaves the same on every runner (macOS system Python
+      # refuses a bare `pip install` under PEP 668).
       - name: Install uv-bundler and pex
-        run: pip install dist/uv_bundler-*.whl pex
+        run: |
+          uv tool install dist/uv_bundler-*.whl
+          uv tool install pex
 
       # PEX caches downloaded wheels in ~/.pex; key by arch + all PEX sample pyproject hashes
       - name: Cache PEX downloads
         uses: actions/cache@v5
         with:
           path: ~/.pex
-          key: pex-linux-${{ matrix.target-arch }}-${{ hashFiles('validation/samples/single-spark-job/pyproject.toml', 'validation/samples/numpy-etl/pyproject.toml') }}
-          restore-keys: pex-linux-${{ matrix.target-arch }}-
+          key: pex-${{ matrix.host }}-host-linux-${{ matrix.target-arch }}-${{ hashFiles('validation/samples/single-spark-job/pyproject.toml', 'validation/samples/numpy-etl/pyproject.toml') }}
+          restore-keys: pex-${{ matrix.host }}-host-linux-${{ matrix.target-arch }}-
 
       # ── single-spark-job fat (JAR + ZIP + PEX) ───────────────────────────
       - name: Build single-spark-job for linux/${{ matrix.target-arch }}
@@ -121,7 +137,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: artifacts-linux-${{ matrix.target-arch }}
+          name: artifacts-${{ matrix.host }}-host-linux-${{ matrix.target-arch }}
           path: |
             artifacts/single-spark-job-linux-${{ matrix.target-arch }}.*
             artifacts/single-spark-job-linux-${{ matrix.target-arch }}-slim.*
@@ -131,15 +147,15 @@ jobs:
 
   # ── Runtime validation ────────────────────────────────────────────────────
   #
-  # Each artifact set is validated on the NATIVE runner for that arch,
-  # inside python:3.10-slim Docker — the exact target environment.
+  # Each artifact set (from every build host) is validated on the NATIVE runner
+  # for its arch, inside python:3.10-slim Docker — the exact target environment.
   #
   # Separate steps per format and sample so failures are immediately visible.
   # No packages are pre-installed: fat artifacts must be fully self-contained.
   # Slim artifacts are validated for structure only (deps not bundled).
   #
   validate-linux:
-    name: Validate linux/${{ matrix.target-arch }}
+    name: Validate linux/${{ matrix.target-arch }} (built on ${{ matrix.host }})
     needs: build-linux
     strategy:
       fail-fast: false
@@ -147,8 +163,16 @@ jobs:
         include:
           - runner: ubuntu-latest       # x86_64 runtime
             target-arch: x86_64
+            host: linux
           - runner: ubuntu-24.04-arm    # aarch64 runtime
             target-arch: aarch64
+            host: linux
+          - runner: ubuntu-latest
+            target-arch: x86_64
+            host: macos
+          - runner: ubuntu-24.04-arm
+            target-arch: aarch64
+            host: macos
     runs-on: ${{ matrix.runner }}
     env:
       SPARK_STEM: single-spark-job-linux-${{ matrix.target-arch }}
@@ -161,7 +185,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v7
         with:
-          name: artifacts-linux-${{ matrix.target-arch }}
+          name: artifacts-${{ matrix.host }}-host-linux-${{ matrix.target-arch }}
           path: artifacts
 
       # ── single-spark-job fat ──────────────────────────────────────────────

@@ -192,7 +192,7 @@ When adding a feature:
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `ci.yml` | PR + push | Lint → unit tests (4 Python versions) → integration tests → benchmarks (main only) |
-| `artifacts.yml` | PR + push | Cross-arch builds on real hardware (x86_64 + aarch64), Docker validation |
+| `artifacts.yml` | PR + push | Cross-arch builds on Linux (x86_64 + aarch64) and macOS (Apple Silicon) hosts; every artifact is run in `python:3.10-slim` Docker on native hardware |
 | `release.yml` | `git tag v*` | Build wheel + sdist, publish to PyPI via OIDC trusted publishing |
 
 ---
