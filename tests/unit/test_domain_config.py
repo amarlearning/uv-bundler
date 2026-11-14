@@ -6,7 +6,7 @@ import pytest
 from uv_bundler.domain.config import (
     GlobalConfig,
     TargetConfig,
-    UvPackConfig,
+    UvBundlerConfig,
     assert_module_path_exists,
 )
 from uv_bundler.services.config_loader import load_pyproject
@@ -45,18 +45,18 @@ def test_assert_module_path_exists_raises_for_missing_submodule(tmp_path: Path) 
         assert_module_path_exists(tmp_path, "app.missing:run")
 
 
-# ── UvPackConfig.resolve_target ───────────────────────────────────────────────
+# ── UvBundlerConfig.resolve_target ───────────────────────────────────────────────
 
 
 def test_resolve_target_requires_default() -> None:
-    cfg = UvPackConfig(global_config=GlobalConfig(), targets={})
+    cfg = UvBundlerConfig(global_config=GlobalConfig(), targets={})
     with pytest.raises(ValueError):
         cfg.resolve_target(None)
 
 
 def test_resolve_target_missing_named_target_raises() -> None:
     global_cfg = GlobalConfig(default_target="spark-prod")
-    cfg = UvPackConfig(global_config=global_cfg, targets={})
+    cfg = UvBundlerConfig(global_config=global_cfg, targets={})
     with pytest.raises(KeyError):
         cfg.resolve_target("spark-prod")
 
@@ -72,7 +72,7 @@ def test_resolve_target_merges_config_and_targets() -> None:
         manylinux="2014",
         compression="deflated",
     )
-    cfg = UvPackConfig(global_config=global_cfg, targets={"spark-prod": target})
+    cfg = UvBundlerConfig(global_config=global_cfg, targets={"spark-prod": target})
     resolved = cfg.resolve_target(None)
     assert resolved.entry_point == "app.main:run"
     assert resolved.platform == "linux"
@@ -83,7 +83,7 @@ def test_resolve_target_merges_config_and_targets() -> None:
 
 def test_resolve_target_by_explicit_name() -> None:
     global_cfg = GlobalConfig(default_target="default-tgt")
-    cfg = UvPackConfig(
+    cfg = UvBundlerConfig(
         global_config=global_cfg,
         targets={
             "default-tgt": TargetConfig(format="jar", entry_point="a:b"),
@@ -162,7 +162,7 @@ def test_resolve_target_passes_through_slim_fields() -> None:
         slim=True,
         slim_exclude=["*.pyi"],
     )
-    cfg = UvPackConfig(global_config=global_cfg, targets={"t": target})
+    cfg = UvBundlerConfig(global_config=global_cfg, targets={"t": target})
     resolved = cfg.resolve_target(None)
     assert resolved.slim is True
     assert resolved.slim_exclude == ["*.pyi"]
@@ -170,7 +170,7 @@ def test_resolve_target_passes_through_slim_fields() -> None:
 
 def test_resolve_target_slim_defaults_false_when_not_set() -> None:
     global_cfg = GlobalConfig(default_target="t")
-    cfg = UvPackConfig(
+    cfg = UvBundlerConfig(
         global_config=global_cfg,
         targets={"t": TargetConfig(format="jar", entry_point="app.main:run")},
     )

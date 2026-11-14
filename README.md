@@ -181,6 +181,7 @@ Options:
   --manylinux TEXT        Override manylinux tag  (e.g. 2014)
   --slim                  Bundle source only — skip dependency resolution and installation
   --dry-run               Print resolved config without building
+  -p, --project PATH      Project directory containing pyproject.toml  (default: .)
 ```
 
 `--slim` overrides `slim = false` in config. Slim artifacts are named with a `-slim` infix: `my-job-linux-x86_64-slim.jar`.

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-from uv_bundler.domain.config import TargetConfig
+from uv_bundler.domain.config import DEFAULT_PYTHON_VERSION, TargetConfig
 from uv_bundler.domain.platforms import wheel_platform_tag
 from uv_bundler.services.bootstrap import render_bootstrap
 from uv_bundler.services.resolver import Runner
@@ -111,7 +111,7 @@ def build_zip(
 
 def _pex_platform_tag(target: TargetConfig) -> str:
     """Return a PEX ``--platform`` string, e.g. ``manylinux2014_x86_64-cp-310-cp310``."""
-    pyver = (target.python_version or "3.10").replace(".", "")
+    pyver = (target.python_version or DEFAULT_PYTHON_VERSION).replace(".", "")
     os_platform = wheel_platform_tag(
         target.platform or "linux", target.arch or "x86_64", target.manylinux
     )

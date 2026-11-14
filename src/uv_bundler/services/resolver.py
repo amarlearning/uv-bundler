@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from uv_bundler.domain.config import TargetConfig
+from uv_bundler.domain.config import DEFAULT_PYTHON_VERSION, TargetConfig
 from uv_bundler.domain.platforms import pep508_platform
 
 
@@ -15,7 +15,7 @@ def build_compile_cmd(pyproject: Path, target: TargetConfig, lock_path: Path) ->
     if not target.platform or not target.arch:
         raise ValueError("target requires platform and arch")
     platform = pep508_platform(target.platform, target.arch, target.manylinux)
-    python_version = target.python_version or "3.10"
+    python_version = target.python_version or DEFAULT_PYTHON_VERSION
     return [
         "uv",
         "pip",
@@ -41,7 +41,7 @@ def build_install_cmd(lock_path: Path, target: TargetConfig, site_packages: Path
     if not target.platform or not target.arch:
         raise ValueError("target requires platform and arch")
     platform = pep508_platform(target.platform, target.arch, target.manylinux)
-    python_version = target.python_version or "3.10"
+    python_version = target.python_version or DEFAULT_PYTHON_VERSION
     return [
         "uv",
         "pip",

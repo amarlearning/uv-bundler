@@ -16,7 +16,7 @@ from typer.testing import CliRunner
 
 import uv_bundler.cli as _cli
 from uv_bundler.cli import _artifact_path, _is_excluded, _output_root, _stage_sources, app
-from uv_bundler.domain.config import GlobalConfig, TargetConfig, UvPackConfig
+from uv_bundler.domain.config import GlobalConfig, TargetConfig, UvBundlerConfig
 
 # ── _is_excluded ──────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ def test_output_root_uses_out_dir_env_var(tmp_path: Path, monkeypatch: pytest.Mo
     env_dir = tmp_path / "env_out"
     monkeypatch.setenv("OUT_DIR", str(env_dir))
     pyproject = tmp_path / "pyproject.toml"
-    cfg = UvPackConfig(global_config=GlobalConfig(output_base="./dist"))
+    cfg = UvBundlerConfig(global_config=GlobalConfig(output_base="./dist"))
     result = _output_root(pyproject, cfg)
     assert result == env_dir.resolve()
 
@@ -59,7 +59,7 @@ def test_output_root_out_dir_takes_precedence_over_config(
     env_dir = tmp_path / "from_env"
     monkeypatch.setenv("OUT_DIR", str(env_dir))
     pyproject = tmp_path / "pyproject.toml"
-    cfg = UvPackConfig(global_config=GlobalConfig(output_base="./should_not_use"))
+    cfg = UvBundlerConfig(global_config=GlobalConfig(output_base="./should_not_use"))
     assert _output_root(pyproject, cfg) == env_dir.resolve()
 
 
@@ -68,7 +68,7 @@ def test_output_root_uses_output_base_from_config(
 ) -> None:
     monkeypatch.delenv("OUT_DIR", raising=False)
     pyproject = tmp_path / "pyproject.toml"
-    cfg = UvPackConfig(global_config=GlobalConfig(output_base="./artifacts"))
+    cfg = UvBundlerConfig(global_config=GlobalConfig(output_base="./artifacts"))
     result = _output_root(pyproject, cfg)
     assert result == (tmp_path / "artifacts").resolve()
 
@@ -76,7 +76,7 @@ def test_output_root_uses_output_base_from_config(
 def test_output_root_defaults_to_dist(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OUT_DIR", raising=False)
     pyproject = tmp_path / "pyproject.toml"
-    cfg = UvPackConfig(global_config=GlobalConfig())
+    cfg = UvBundlerConfig(global_config=GlobalConfig())
     result = _output_root(pyproject, cfg)
     assert result == (tmp_path / "dist").resolve()
 
@@ -85,21 +85,21 @@ def test_output_root_defaults_to_dist(tmp_path: Path, monkeypatch: pytest.Monkey
 
 
 def test_artifact_path_naming(tmp_path: Path) -> None:
-    cfg = UvPackConfig(global_config=GlobalConfig(project_name="my-job"))
+    cfg = UvBundlerConfig(global_config=GlobalConfig(project_name="my-job"))
     tgt = TargetConfig(platform="linux", arch="x86_64")
     path = _artifact_path(tmp_path, cfg, tgt, ".jar")
     assert path == tmp_path / "my-job-linux-x86_64.jar"
 
 
 def test_artifact_path_defaults_project_name_to_app(tmp_path: Path) -> None:
-    cfg = UvPackConfig(global_config=GlobalConfig())  # no project_name
+    cfg = UvBundlerConfig(global_config=GlobalConfig())  # no project_name
     tgt = TargetConfig(platform="linux", arch="aarch64")
     path = _artifact_path(tmp_path, cfg, tgt, ".pex")
     assert path == tmp_path / "app-linux-aarch64.pex"
 
 
 def test_artifact_path_zip_suffix(tmp_path: Path) -> None:
-    cfg = UvPackConfig(global_config=GlobalConfig(project_name="lambda-fn"))
+    cfg = UvBundlerConfig(global_config=GlobalConfig(project_name="lambda-fn"))
     tgt = TargetConfig(platform="linux", arch="x86_64")
     path = _artifact_path(tmp_path, cfg, tgt, ".zip")
     assert path.name == "lambda-fn-linux-x86_64.zip"
@@ -360,14 +360,14 @@ def test_cli_jar_artifact_is_valid_zip(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_artifact_path_slim_adds_slim_suffix(tmp_path: Path) -> None:
-    cfg = UvPackConfig(global_config=GlobalConfig(project_name="my-job"))
+    cfg = UvBundlerConfig(global_config=GlobalConfig(project_name="my-job"))
     tgt = TargetConfig(platform="linux", arch="x86_64")
     path = _artifact_path(tmp_path, cfg, tgt, ".jar", slim=True)
     assert path == tmp_path / "my-job-linux-x86_64-slim.jar"
 
 
 def test_artifact_path_no_slim_no_suffix(tmp_path: Path) -> None:
-    cfg = UvPackConfig(global_config=GlobalConfig(project_name="my-job"))
+    cfg = UvBundlerConfig(global_config=GlobalConfig(project_name="my-job"))
     tgt = TargetConfig(platform="linux", arch="x86_64")
     path = _artifact_path(tmp_path, cfg, tgt, ".jar", slim=False)
     assert path == tmp_path / "my-job-linux-x86_64.jar"
@@ -558,3 +558,28 @@ def test_cli_bad_format_fails_before_building(
     assert result.exit_code == 1
     assert message in result.output
     assert calls == []  # rejected before resolving anything
+
+
+def test_stage_sources_preserves_executable_bit(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    (project / "bin").mkdir(parents=True)
+    script = project / "bin" / "run.sh"
+    script.write_text("#!/bin/sh\n")
+    script.chmod(0o755)
+    dest = tmp_path / "dest"
+    _cli._stage_sources(project, dest)
+    assert (dest / "bin" / "run.sh").stat().st_mode & 0o111
+
+
+def test_cli_project_flag_builds_from_another_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "job"
+    project.mkdir()
+    _write_minimal_project(project)
+    monkeypatch.chdir(tmp_path)  # not the project dir
+    _mock_uv_success(monkeypatch)
+    result = CliRunner().invoke(app, ["--project", str(project)])
+    assert result.exit_code == 0, result.output
+    assert list((project / "dist").glob("test-app-linux-x86_64.jar"))
+    assert not (tmp_path / ".uv-bundler").exists()

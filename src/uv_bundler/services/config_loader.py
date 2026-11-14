@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from uv_bundler.domain.config import GlobalConfig, TargetConfig, UvPackConfig
+from uv_bundler.domain.config import GlobalConfig, TargetConfig, UvBundlerConfig
 
 
 def _coerce_target(data: Mapping[str, Any]) -> TargetConfig:
@@ -29,7 +29,7 @@ def _coerce_target(data: Mapping[str, Any]) -> TargetConfig:
     )
 
 
-def load_pyproject(path: Path) -> UvPackConfig:
+def load_pyproject(path: Path) -> UvBundlerConfig:
     if not path.exists():
         raise FileNotFoundError(f"pyproject.toml not found at {path}")
     loader_name = "tomllib" if sys.version_info >= (3, 11) else "tomli"
@@ -48,7 +48,7 @@ def load_pyproject(path: Path) -> UvPackConfig:
     for name, cfg in targets_raw.items():
         targets[name] = _coerce_target(cfg or {})
     try:
-        return UvPackConfig(global_config=global_cfg, targets=targets)
+        return UvBundlerConfig(global_config=global_cfg, targets=targets)
     except ValidationError as e:
         raise ValueError(f"Invalid uv-bundler configuration: {e}") from e
 

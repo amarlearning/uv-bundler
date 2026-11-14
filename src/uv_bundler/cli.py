@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import shutil
 from pathlib import Path
 from typing import NoReturn
 
@@ -11,8 +12,9 @@ from uv_bundler.adapters.fs import clean_staging, create_staging
 from uv_bundler.adapters.process import run as process_run
 from uv_bundler.domain.platforms import wheel_platform_tag
 from uv_bundler.domain.config import (
+    DEFAULT_PYTHON_VERSION,
     TargetConfig,
-    UvPackConfig,
+    UvBundlerConfig,
     assert_module_path_exists,
 )
 from uv_bundler.services.config_loader import load_pyproject, merge_overrides
@@ -54,7 +56,7 @@ def _no_wheel_hint(tgt: TargetConfig) -> str:
     tag = wheel_platform_tag(tgt.platform or "linux", tgt.arch or "x86_64", tgt.manylinux)
     return (
         f"If the error above mentions building a package from source, that dependency has no "
-        f"{tag} wheel for Python {tgt.python_version or '3.10'}, and native code can't be "
+        f"{tag} wheel for Python {tgt.python_version or DEFAULT_PYTHON_VERSION}, and native code can't be "
         "compiled for another platform. Pin a version that publishes one, pick a "
         "--manylinux/--python-version it supports, or build on the target platform."
     )
@@ -95,13 +97,13 @@ def _stage_sources(project_root: Path, dest: Path, exclude: list[str] | None = N
                     out_path.mkdir(parents=True, exist_ok=True)
                 else:
                     out_path.parent.mkdir(parents=True, exist_ok=True)
-                    out_path.write_bytes(sub.read_bytes())
+                    shutil.copy2(sub, out_path)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(child.read_bytes())
+            shutil.copy2(child, target)
 
 
-def _output_root(pyproject: Path, cfg: UvPackConfig) -> Path:
+def _output_root(pyproject: Path, cfg: UvBundlerConfig) -> Path:
     env_out = os.getenv("OUT_DIR")
     if env_out:
         return Path(env_out).resolve()
@@ -110,7 +112,7 @@ def _output_root(pyproject: Path, cfg: UvPackConfig) -> Path:
 
 
 def _artifact_path(
-    out_root: Path, cfg: UvPackConfig, tgt: TargetConfig, suffix: str, slim: bool = False
+    out_root: Path, cfg: UvBundlerConfig, tgt: TargetConfig, suffix: str, slim: bool = False
 ) -> Path:
     base_name = cfg.global_config.project_name or "app"
     platform = tgt.platform or "unknown-os"
@@ -125,7 +127,7 @@ def _assemble(
     staging_base: Path,
     tgt: TargetConfig,
     out_root: Path,
-    cfg: UvPackConfig,
+    cfg: UvBundlerConfig,
     effective_slim: bool,
     pyproject: Path,
 ) -> None:
@@ -191,12 +193,16 @@ def build(
     slim: bool = typer.Option(
         False, "--slim", help="Build slim artifact (source only, no dependencies bundled)"
     ),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory containing pyproject.toml"
+    ),
 ) -> None:
     """
     Build artifacts for a target defined in pyproject.toml.
     Validates configuration and supports dry-run inspection of the build plan.
     """
-    pyproject = Path("pyproject.toml").resolve()
+    root = Path(project).resolve()
+    pyproject = root / "pyproject.toml"
     cfg = load_pyproject(pyproject)
     tgt = cfg.resolve_target(target)
     tgt = merge_overrides(
@@ -213,7 +219,7 @@ def build(
         _fail(f"target is missing required key(s): {', '.join(missing)}")
     if tgt.format not in _FORMATS:
         _fail(f"unsupported format {tgt.format!r} (expected one of: {', '.join(_FORMATS)})")
-    assert_module_path_exists(Path.cwd(), tgt.entry_point)
+    assert_module_path_exists(root, tgt.entry_point)
 
     # CLI --slim takes precedence; falls back to config slim=true
     effective_slim = slim or tgt.slim
@@ -230,7 +236,7 @@ def build(
             typer.echo(f"- slim_exclude: {list(tgt.slim_exclude)}")
         return
 
-    staging_base = Path(".uv-bundler").resolve()
+    staging_base = root / ".uv-bundler"
     paths = make_staging_paths(staging_base)
     clean_staging(paths)
     create_staging(paths)

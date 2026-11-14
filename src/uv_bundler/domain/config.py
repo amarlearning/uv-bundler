@@ -4,6 +4,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
+DEFAULT_PYTHON_VERSION = "3.10"
+
 
 class GlobalConfig(BaseModel):
     project_name: str | None = None
@@ -39,7 +41,7 @@ class TargetConfig(BaseModel):
         return self
 
 
-class UvPackConfig(BaseModel):
+class UvBundlerConfig(BaseModel):
     global_config: GlobalConfig = Field(default_factory=GlobalConfig)
     targets: dict[str, TargetConfig] = Field(default_factory=dict)
 

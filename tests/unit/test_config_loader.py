@@ -54,9 +54,9 @@ def test_load_pyproject_missing_file_raises(tmp_path: Path) -> None:
 
 def test_load_pyproject_wraps_pydantic_validation_errors(tmp_path: Path, monkeypatch) -> None:
     def failing_uv_bundler_config(*args, **kwargs):
-        raise ValidationError.from_exception_data("UvPackConfig", [])
+        raise ValidationError.from_exception_data("UvBundlerConfig", [])
 
-    monkeypatch.setattr(config_loader, "UvPackConfig", failing_uv_bundler_config)
+    monkeypatch.setattr(config_loader, "UvBundlerConfig", failing_uv_bundler_config)
     path = write_pyproject(tmp_path)
     with pytest.raises(ValueError) as exc:
         load_pyproject(path)

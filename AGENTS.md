@@ -22,7 +22,7 @@
 src/uv_bundler/
 ├── cli.py              # Entry point + build orchestration (Typer app)
 ├── domain/
-│   ├── config.py       # Pydantic config models (UvPackConfig, TargetConfig, GlobalConfig)
+│   ├── config.py       # Pydantic config models (UvBundlerConfig, TargetConfig, GlobalConfig)
 │   └── platforms.py    # PEP 508 platform tag generation
 ├── services/
 │   ├── config_loader.py  # TOML parsing, target resolution, CLI override merging
