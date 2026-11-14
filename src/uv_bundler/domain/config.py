@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
-DEFAULT_PYTHON_VERSION = "3.10"
+DEFAULT_PYTHON_VERSION = "3.12"  # target runtime when python_version is unset
 
 
 class GlobalConfig(BaseModel):

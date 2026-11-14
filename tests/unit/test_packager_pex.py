@@ -61,10 +61,10 @@ def test_pex_platform_tag_windows() -> None:
 
 
 def test_pex_platform_tag_defaults() -> None:
-    # All None → linux/x86_64/3.10/manylinux2014
+    # All None → linux/x86_64/3.12/manylinux2014
     tgt = TargetConfig()
     tag = _pex_platform_tag(tgt)
-    assert tag == "manylinux2014_x86_64-cp-310-cp310"
+    assert tag == "manylinux2014_x86_64-cp-312-cp312"
 
 
 # ── build_pex_command ─────────────────────────────────────────────────────────

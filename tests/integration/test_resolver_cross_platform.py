@@ -76,8 +76,8 @@ def test_invalid_combo_raises_value_error(tmp_path: Path) -> None:
 
 
 @requires_uv
-def test_missing_python_version_defaults_to_3_10(tmp_path: Path) -> None:
-    # python_version=None is accepted; the resolver defaults to "3.10"
+def test_missing_python_version_uses_default(tmp_path: Path) -> None:
+    # python_version=None is accepted; the resolver uses DEFAULT_PYTHON_VERSION
     py = _write_min_pyproject(tmp_path)
     tgt = TargetConfig(
         format="jar",

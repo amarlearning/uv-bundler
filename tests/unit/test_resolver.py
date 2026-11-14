@@ -67,7 +67,7 @@ def test_build_compile_cmd_missing_platform_raises() -> None:
 def test_build_compile_cmd_defaults_python_version() -> None:
     tgt = _linux_target(python_version=None)
     cmd = build_compile_cmd(Path("pyproject.toml"), tgt, Path("resolved.lock"))
-    assert "3.10" in cmd
+    assert "3.12" in cmd
 
 
 # ── compile_lockfile ──────────────────────────────────────────────────────────
@@ -122,7 +122,7 @@ def test_build_install_cmd_missing_platform_raises() -> None:
 def test_build_install_cmd_defaults_python_version() -> None:
     tgt = _linux_target(python_version=None)
     cmd = build_install_cmd(Path("lock"), tgt, Path("site"))
-    assert "3.10" in cmd
+    assert "3.12" in cmd
 
 
 # ── install_dependencies ──────────────────────────────────────────────────────

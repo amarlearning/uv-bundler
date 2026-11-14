@@ -178,7 +178,7 @@ entry_point = "app.main:run"          # module.submodule:function
 
 platform = "linux"                    # "linux" | "macos" | "windows"
 arch = "x86_64"                       # "x86_64" | "aarch64"
-python_version = "3.10"               # default 3.10
+python_version = "3.12"               # default 3.12
 manylinux = "2014"                    # "2010" | "2014" | glibc minor, e.g. "31"
 
 compression = "deflated"              # "deflated" | "stored"
