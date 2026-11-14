@@ -220,6 +220,14 @@ def _write_minimal_project(tmp_path: Path) -> None:
             python_version = "3.10"
             manylinux = "2014"
 
+            [tool.uv-bundler.targets.airflow-pex]
+            format = "pex"
+            entry_point = "app.main:run"
+            platform = "linux"
+            arch = "x86_64"
+            python_version = "3.10"
+            manylinux = "2014"
+
             [tool.uv-bundler.targets.spark-zip]
             format = "zip"
             entry_point = "app.main:run"
@@ -496,3 +504,22 @@ def test_cli_slim_flag_overrides_config_slim_false(
     assert result.exit_code == 0
     dist = tmp_path / "dist"
     assert any(p.name.endswith("-slim.jar") for p in dist.iterdir())
+
+
+def test_cli_pex_compiles_but_skips_uv_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """pex resolves the lockfile itself, so `uv pip install` would be wasted work."""
+    _write_minimal_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    calls: list[list[str]] = []
+
+    def tracking_run(args: list[str], **kwargs: object) -> int:
+        calls.append(args)
+        return 0
+
+    monkeypatch.setattr(_cli, "process_run", tracking_run)
+    result = CliRunner().invoke(app, ["--target", "airflow-pex"])
+    assert result.exit_code == 0, result.stdout
+    assert [c[:3] for c in calls if c[0] == "uv"] == [["uv", "pip", "compile"]]
+    assert any(c[0] == "pex" for c in calls)

@@ -70,7 +70,7 @@ Understanding this helps when touching any part of the code:
 
 1. **Context hydration** — `config_loader.py` reads `[tool.uv-bundler]` from `pyproject.toml`, resolves the target, merges CLI overrides
 2. **Ghost Resolution** — `resolver.py` runs `uv pip compile --python-platform <target>` to produce a lockfile for the *target* OS, not the build host. **Skipped in slim mode.**
-3. **Staging** — `resolver.py` runs `uv pip install --target` to extract wheels into `.uv-bundler/staging/site-packages/`. **Skipped in slim mode.**
+3. **Staging** — `resolver.py` runs `uv pip install --target` to extract wheels into `.uv-bundler/staging/site-packages/`. **Skipped in slim mode and for PEX** (pex resolves the lockfile itself).
 4. **Bootstrap generation** — `bootstrap.py` renders a `__main__.py` that sets up `sys.path` correctly both inside a zip archive and when extracted
 5. **Assembly** — `packager.py` builds JAR/ZIP/PEX from staged sources + site-packages
 
@@ -166,7 +166,9 @@ When adding a feature:
 
 - **Don't call subprocess directly.** Always thread a `Runner` through so tests can inject fakes.
 - **Don't mutate config objects.** `TargetConfig` / `GlobalConfig` are Pydantic frozen models.
-- **Binary safety:** `build_jar()` / `build_zip()` for Linux targets call `_ensure_no_incompatible_binaries()`. Keep this check in place.
+- **Binary safety:** `build_jar()` / `build_zip()` for Linux targets call `_ensure_no_incompatible_binaries()`. Keep this check in place. `build_jar()` also warns on bundled `.so` files (zipimport can't load them); ZIP allows them because Lambda extracts the archive.
+- **PEX skips `uv pip install`.** pex resolves the lockfile itself, so only `uv pip compile` runs for PEX targets.
+- **Platform tags live in `platforms.py` only.** `pep508_platform()` for uv, `wheel_platform_tag()` for PEX/wheel tags — don't re-derive them elsewhere.
 - **Slim mode skips resolver entirely.** Any code touching `staging.site_packages` must be guarded by `not config.slim`.
 - **`OUT_DIR` env var beats `output_base` in config.** Check `_output_root()` in `cli.py:_output_root` before touching output path logic.
 - **PEX caching:** PEX downloads are cached in `$PEX_ROOT` (`~/.pex`). CI artifact workflow caches this between runs — don't change the cache key without updating `.github/workflows/artifacts.yml`.
@@ -212,5 +214,4 @@ These must be on PATH at build time — they are not listed as Python dependenci
 | Tool | Purpose | Required for |
 |------|---------|-------------|
 | `uv` | Ghost Resolution (compile + install) | All normal (non-slim) builds |
-| `pip` | Wheel pre-download for PEX offline builds | PEX format only |
 | `pex` | PEX assembly | PEX format only |

@@ -86,6 +86,14 @@ def test_build_jar_ignores_binaries_for_non_linux_targets(tmp_path: Path) -> Non
     assert res.output.exists()
 
 
+def test_build_jar_warns_on_native_extensions(tmp_path: Path) -> None:
+    paths = make_staging(tmp_path)
+    (paths.site_packages / "_multiarray.so").write_text("bin")
+    target = TargetConfig(platform="linux", arch="x86_64")
+    with pytest.warns(UserWarning, match="native extension"):
+        build_jar(paths, "app.main:run", target, tmp_path / "out.jar")
+
+
 # ── compression ───────────────────────────────────────────────────────────────
 
 

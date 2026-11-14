@@ -101,7 +101,7 @@ Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directl
 
 1. **Context hydration** — reads `pyproject.toml`, merges CLI overrides, validates the entry point module path.
 2. **Ghost Resolution** — runs `uv pip compile --python-platform <target>` to pin platform-specific wheel hashes for the *target* OS, not the build host. *(skipped in slim mode)*
-3. **Staging** — runs `uv pip install --target` to extract wheels into a staging directory alongside your source code. *(skipped in slim mode)*
+3. **Staging** — runs `uv pip install --target` to extract wheels into a staging directory alongside your source code. *(skipped in slim mode and for PEX, which resolves the lockfile itself)*
 4. **Bootstrap generation** — generates a `__main__.py` that correctly loads `site-packages` at runtime, including when executed directly from inside a zip archive (zipapp mode).
 5. **Assembly** — bundles everything into the requested format. In slim mode, only source code is bundled — no `site-packages/`.
 

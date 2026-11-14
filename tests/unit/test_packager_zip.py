@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
+import pytest
+
 from uv_bundler.domain.config import TargetConfig
 from uv_bundler.services.packager import build_zip
 from uv_bundler.services.staging import StagingPaths
@@ -92,3 +94,22 @@ def test_build_zip_extra_files_skips_missing_source(tmp_path: Path) -> None:
     build_zip(paths, "app.main:run", target, out, project_root=project_root)
     with ZipFile(out) as zf:
         assert "dest.yaml" not in zf.namelist()
+
+
+# ── binary safety (Linux targets only) ───────────────────────────────────────
+
+
+def test_build_zip_detects_incompatible_binaries(tmp_path: Path) -> None:
+    paths = make_staging(tmp_path)
+    (paths.site_packages / "libfoo.dylib").write_text("bin")
+    target = TargetConfig(platform="linux", arch="aarch64")
+    with pytest.raises(ValueError, match="Incompatible binary"):
+        build_zip(paths, "app.main:run", target, tmp_path / "out.zip")
+
+
+def test_build_zip_allows_so_files(tmp_path: Path) -> None:
+    """Lambda extracts the ZIP, so native .so extensions are fine."""
+    paths = make_staging(tmp_path)
+    (paths.site_packages / "_core.so").write_text("bin")
+    target = TargetConfig(platform="linux", arch="x86_64")
+    assert build_zip(paths, "app.main:run", target, tmp_path / "out.zip").output.exists()

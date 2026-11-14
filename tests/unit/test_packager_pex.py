@@ -50,11 +50,14 @@ def test_pex_platform_tag_macos() -> None:
     assert tag == "macosx_10_9_x86_64-cp-310-cp310"
 
 
-def test_pex_platform_tag_unknown_platform() -> None:
+def test_pex_platform_tag_macos_apple_silicon() -> None:
+    tgt = TargetConfig(platform="macos", arch="aarch64", python_version="3.12")
+    assert _pex_platform_tag(tgt) == "macosx_11_0_arm64-cp-312-cp312"
+
+
+def test_pex_platform_tag_windows() -> None:
     tgt = TargetConfig(platform="windows", arch="x86_64", python_version="3.10")
-    tag = _pex_platform_tag(tgt)
-    assert "windows_x86_64" in tag
-    assert "cp310" in tag
+    assert _pex_platform_tag(tgt) == "win_amd64-cp-310-cp310"
 
 
 def test_pex_platform_tag_defaults() -> None:
@@ -99,49 +102,6 @@ def test_build_pex_command_without_lock_or_target(tmp_path: Path) -> None:
     cmd = build_pex_command(paths, "app.main:run", out)
     assert "-r" not in cmd
     assert "--platform" not in cmd
-    assert "--find-links" not in cmd
-    assert "--no-index" not in cmd
-
-
-def test_build_pex_command_with_wheels_dir_and_lock(tmp_path: Path) -> None:
-    paths = make_staging(tmp_path)
-    wheels = tmp_path / "wheels"
-    wheels.mkdir()
-    lock = tmp_path / "resolved.lock"
-    lock.write_text("pyspark==3.5.0\n")
-    out = tmp_path / "app.pex"
-    cmd = build_pex_command(paths, "app.main:run", out, lock_file=lock, wheels_dir=wheels)
-    assert "--find-links" in cmd
-    assert str(wheels) in cmd
-    assert "--no-index" in cmd
-    assert "-r" in cmd
-    assert str(lock) in cmd
-
-
-def test_build_pex_command_with_wheels_dir_no_lock(tmp_path: Path) -> None:
-    """wheels_dir present but no lock → --find-links and --no-index, no -r."""
-    paths = make_staging(tmp_path)
-    wheels = tmp_path / "wheels"
-    wheels.mkdir()
-    out = tmp_path / "app.pex"
-    cmd = build_pex_command(paths, "app.main:run", out, wheels_dir=wheels)
-    assert "--find-links" in cmd
-    assert "--no-index" in cmd
-    assert "-r" not in cmd
-
-
-def test_build_pex_command_wheels_dir_not_a_dir_falls_back(tmp_path: Path) -> None:
-    """Non-existent wheels_dir is treated as absent → falls back to lock_file only."""
-    paths = make_staging(tmp_path)
-    lock = tmp_path / "resolved.lock"
-    lock.write_text("pyspark==3.5.0\n")
-    out = tmp_path / "app.pex"
-    cmd = build_pex_command(
-        paths, "app.main:run", out, lock_file=lock, wheels_dir=tmp_path / "no_such_dir"
-    )
-    assert "--find-links" not in cmd
-    assert "--no-index" not in cmd
-    assert "-r" in cmd
 
 
 def test_build_pex_command_includes_tools_flag(tmp_path: Path) -> None:

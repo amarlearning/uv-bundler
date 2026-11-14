@@ -148,6 +148,9 @@ def _resolve_and_install(
         typer.echo("Failed to resolve dependencies")
         raise typer.Exit(code=1)
 
+    if tgt.format == "pex":
+        return  # pex resolves the lockfile itself; site-packages would go unused
+
     typer.echo("Installing dependencies into staging...")
     if (
         install_dependencies(lock_file, tgt, paths.site_packages, process_run, cwd=pyproject.parent)

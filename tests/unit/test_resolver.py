@@ -6,12 +6,9 @@ import pytest
 
 from uv_bundler.domain.config import TargetConfig
 from uv_bundler.services.resolver import (
-    _pip_platform_tag,
     build_compile_cmd,
     build_install_cmd,
-    build_pip_download_cmd,
     compile_lockfile,
-    download_wheels,
     install_dependencies,
 )
 
@@ -151,83 +148,3 @@ def test_install_dependencies_propagates_runner_failure(tmp_path: Path) -> None:
     lock.write_text("")
     code = install_dependencies(lock, tgt, tmp_path / "site", runner)
     assert code == rc
-
-
-# ── _pip_platform_tag ─────────────────────────────────────────────────────────
-
-
-def test_pip_platform_tag_linux_manylinux2014() -> None:
-    tgt = _linux_target(arch="x86_64", manylinux="2014")
-    assert _pip_platform_tag(tgt) == "manylinux2014_x86_64"
-
-
-def test_pip_platform_tag_linux_manylinux2010() -> None:
-    tgt = _linux_target(arch="aarch64", manylinux="2010")
-    assert _pip_platform_tag(tgt) == "manylinux2010_aarch64"
-
-
-def test_pip_platform_tag_linux_numeric_manylinux() -> None:
-    tgt = _linux_target(arch="x86_64", manylinux="31")
-    assert _pip_platform_tag(tgt) == "manylinux_2_31_x86_64"
-
-
-def test_pip_platform_tag_macos() -> None:
-    tgt = TargetConfig(platform="macos", arch="x86_64")
-    assert _pip_platform_tag(tgt) == "macosx_10_9_x86_64"
-
-
-def test_pip_platform_tag_unknown_platform() -> None:
-    tgt = TargetConfig(platform="windows", arch="x86_64")
-    assert _pip_platform_tag(tgt) == "windows_x86_64"
-
-
-def test_pip_platform_tag_defaults() -> None:
-    # No platform/arch set — defaults to linux/x86_64/2014
-    tgt = TargetConfig()
-    assert _pip_platform_tag(tgt) == "manylinux2014_x86_64"
-
-
-# ── build_pip_download_cmd ────────────────────────────────────────────────────
-
-
-def test_build_pip_download_cmd_structure(tmp_path: Path) -> None:
-    tgt = _linux_target()
-    lock = tmp_path / "resolved.lock"
-    dest = tmp_path / "wheels"
-    cmd = build_pip_download_cmd(lock, tgt, dest)
-    assert cmd[0] == "pip"
-    assert "download" in cmd
-    assert "-r" in cmd
-    assert str(lock) in cmd
-    assert "--dest" in cmd
-    assert str(dest) in cmd
-    assert "--platform" in cmd
-    assert "manylinux2014_x86_64" in cmd
-    assert "--python-version" in cmd
-    assert "310" in cmd
-    assert "--abi" in cmd
-    assert "cp310" in cmd
-    assert "--only-binary" in cmd
-    assert ":all:" in cmd
-
-
-def test_build_pip_download_cmd_missing_platform_raises(tmp_path: Path) -> None:
-    tgt = TargetConfig(format="jar", entry_point="app.main:run")
-    with pytest.raises(ValueError):
-        build_pip_download_cmd(tmp_path / "lock", tgt, tmp_path / "wheels")
-
-
-# ── download_wheels ───────────────────────────────────────────────────────────
-
-
-def test_download_wheels_invokes_runner(tmp_path: Path) -> None:
-    runner = FakeRunner()
-    tgt = _linux_target()
-    lock = tmp_path / "resolved.lock"
-    lock.write_text("packaging==24.2\n")
-    wheels = tmp_path / "wheels"
-    code = download_wheels(lock, tgt, wheels, runner, cwd=tmp_path)
-    assert code == 0
-    assert runner.last_cwd == tmp_path
-    assert runner.calls[0][0] == "pip"
-    assert "download" in runner.calls[0]
