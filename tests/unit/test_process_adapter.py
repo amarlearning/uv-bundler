@@ -19,7 +19,7 @@ def test_run_invokes_subprocess(tmp_path, monkeypatch) -> None:
     assert called["cwd"] == str(d)
 
 
-def test_run_missing_executable_returns_127(monkeypatch) -> None:
+def test_run_missing_executable_returns_127(monkeypatch, capsys) -> None:
     expected = 127
 
     def fake_run(args, cwd=None, check=False):
@@ -28,3 +28,4 @@ def test_run_missing_executable_returns_127(monkeypatch) -> None:
     monkeypatch.setattr(process.subprocess, "run", fake_run)
     code = process.run(["not-a-real-exe"])
     assert code == expected
+    assert "'not-a-real-exe' not found on PATH" in capsys.readouterr().err

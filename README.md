@@ -187,6 +187,14 @@ Options:
 
 ---
 
+## Troubleshooting
+
+**"failed to resolve/install dependencies" mentioning a source build.** Ghost Resolution needs a pre-built wheel for the *target* platform. A package that ships only an sdist with native code can't be compiled for another OS/arch. Pin a version that publishes a matching wheel (e.g. `manylinux2014_aarch64`), adjust `manylinux` / `python_version` to one it supports, or build that artifact on the target platform.
+
+**"'uv' not found on PATH" / "'pex' not found on PATH".** Install the tool: `brew install uv`, `uv tool install pex`.
+
+---
+
 ## Installation
 
 ```bash

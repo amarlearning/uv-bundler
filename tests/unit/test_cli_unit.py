@@ -523,3 +523,38 @@ def test_cli_pex_compiles_but_skips_uv_install(
     assert result.exit_code == 0, result.stdout
     assert [c[:3] for c in calls if c[0] == "uv"] == [["uv", "pip", "compile"]]
     assert any(c[0] == "pex" for c in calls)
+
+
+def test_cli_resolver_failure_explains_missing_wheels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_minimal_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_cli, "process_run", lambda *args, **kwargs: 1)
+    result = CliRunner().invoke(app, [])
+    assert result.exit_code == 1
+    assert "failed to resolve dependencies" in result.output
+    assert "manylinux2014_x86_64 wheel" in result.output
+
+
+@pytest.mark.parametrize(
+    ("toml_line", "message"),
+    [
+        ('format = "jar"', "missing required key(s): format"),
+        ('format = "wheel"', "unsupported format 'wheel'"),
+    ],
+)
+def test_cli_bad_format_fails_before_building(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, toml_line: str, message: str
+) -> None:
+    _write_minimal_project(tmp_path)
+    pyproject = tmp_path / "pyproject.toml"
+    replacement = "" if "jar" in toml_line else toml_line
+    pyproject.write_text(pyproject.read_text().replace('format = "jar"', replacement, 1))
+    monkeypatch.chdir(tmp_path)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(_cli, "process_run", lambda args, **kw: calls.append(args) or 0)
+    result = CliRunner().invoke(app, [])
+    assert result.exit_code == 1
+    assert message in result.output
+    assert calls == []  # rejected before resolving anything

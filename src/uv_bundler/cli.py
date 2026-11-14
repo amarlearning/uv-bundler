@@ -3,11 +3,13 @@ from __future__ import annotations
 import fnmatch
 import os
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 
 from uv_bundler.adapters.fs import clean_staging, create_staging
 from uv_bundler.adapters.process import run as process_run
+from uv_bundler.domain.platforms import wheel_platform_tag
 from uv_bundler.domain.config import (
     TargetConfig,
     UvPackConfig,
@@ -38,6 +40,24 @@ _ROOT_META_FILES = frozenset(
     }
 )
 _ROOT_META_EXTS = frozenset({".md", ".rst", ".txt", ".cfg", ".ini", ".toml"})
+
+
+_FORMATS = ("jar", "zip", "pex")
+
+
+def _fail(message: str, code: int = 1) -> NoReturn:
+    typer.echo(f"Error: {message}", err=True)
+    raise typer.Exit(code=code)
+
+
+def _no_wheel_hint(tgt: TargetConfig) -> str:
+    tag = wheel_platform_tag(tgt.platform or "linux", tgt.arch or "x86_64", tgt.manylinux)
+    return (
+        f"If the error above mentions building a package from source, that dependency has no "
+        f"{tag} wheel for Python {tgt.python_version or '3.10'}, and native code can't be "
+        "compiled for another platform. Pin a version that publishes one, pick a "
+        "--manylinux/--python-version it supports, or build on the target platform."
+    )
 
 
 def _is_excluded(rel_posix: str, patterns: list[str]) -> bool:
@@ -131,10 +151,10 @@ def _assemble(
             target=tgt,
         )
         if code != 0:
-            raise typer.Exit(code=code)
+            _fail(f"pex failed (exit {code}). {_no_wheel_hint(tgt)}", code=code)
         typer.echo(str(output))
     else:
-        raise typer.Exit(code=1)
+        _fail(f"unsupported format {tgt.format!r}")
 
 
 def _resolve_and_install(
@@ -145,8 +165,7 @@ def _resolve_and_install(
     lock_file = staging_base / "resolved.lock"
     typer.echo(f"Resolving dependencies for {tgt.platform}/{tgt.arch}...")
     if compile_lockfile(pyproject, tgt, lock_file, process_run, cwd=pyproject.parent) != 0:
-        typer.echo("Failed to resolve dependencies")
-        raise typer.Exit(code=1)
+        _fail(f"failed to resolve dependencies. {_no_wheel_hint(tgt)}")
 
     if tgt.format == "pex":
         return  # pex resolves the lockfile itself; site-packages would go unused
@@ -156,8 +175,7 @@ def _resolve_and_install(
         install_dependencies(lock_file, tgt, paths.site_packages, process_run, cwd=pyproject.parent)
         != 0
     ):
-        typer.echo("Failed to install dependencies")
-        raise typer.Exit(code=1)
+        _fail(f"failed to install dependencies. {_no_wheel_hint(tgt)}")
 
 
 @app.command()
@@ -190,6 +208,11 @@ def build(
             "manylinux": manylinux,
         },
     )
+    missing = [key for key in ("format", "entry_point") if not getattr(tgt, key)]
+    if missing:
+        _fail(f"target is missing required key(s): {', '.join(missing)}")
+    if tgt.format not in _FORMATS:
+        _fail(f"unsupported format {tgt.format!r} (expected one of: {', '.join(_FORMATS)})")
     assert_module_path_exists(Path.cwd(), tgt.entry_point)
 
     # CLI --slim takes precedence; falls back to config slim=true
@@ -207,8 +230,6 @@ def build(
             typer.echo(f"- slim_exclude: {list(tgt.slim_exclude)}")
         return
 
-    if not tgt.format or not tgt.entry_point:
-        raise typer.Exit(code=1)
     staging_base = Path(".uv-bundler").resolve()
     paths = make_staging_paths(staging_base)
     clean_staging(paths)

@@ -11,4 +11,5 @@ def run(args: list[str], cwd: Path | None = None) -> int:
         proc = subprocess.run(args, cwd=str(cwd) if cwd else None, check=False)
         return int(proc.returncode)
     except FileNotFoundError:
+        print(f"Error: '{args[0]}' not found on PATH", file=sys.stderr)
         return 127
