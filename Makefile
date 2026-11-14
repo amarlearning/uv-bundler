@@ -47,6 +47,9 @@ ensure-sync: ensure-uv
 	@if [ ! -x "$(UV_ENV)/bin/ruff" ] || [ ! -x "$(UV_ENV)/bin/black" ] || [ ! -x "$(UV_ENV)/bin/mypy" ] || [ ! -x "$(UV_ENV)/bin/pytest" ]; then \
 		echo "Syncing dev environment in $(UV_ENV) via uv (--all-extras) ..."; \
 		UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) sync --all-extras; \
+	elif ! "$(UV_ENV)/bin/pytest" --version >/dev/null 2>&1; then \
+		echo "$(UV_ENV) scripts are broken (venv moved or renamed?); reinstalling ..."; \
+		UV_PROJECT_ENVIRONMENT=$(UV_ENV) $(UV) sync --all-extras --reinstall; \
 	fi
 
 .PHONY: fmt
