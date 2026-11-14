@@ -9,7 +9,7 @@ different `.so` binary. A naive `pip install` on macOS downloads macOS wheels, w
 with `ImportError` when deployed to Linux. A plain ZIP bundling your local venv would embed
 the wrong binaries.
 
-uv-bundler's Ghost Resolution (`uv pip install --python-platform`) fetches the correct
+uv-bundler (via uv's `--python-platform`) fetches the correct
 `manylinux2014_x86_64` or `manylinux2014_aarch64` wheels regardless of your build host.
 
 Because numpy/pandas are C extensions, the **PEX format** is used — PEX extracts `.so`
@@ -44,7 +44,7 @@ uv-bundler --dry-run
 # Build for linux/x86_64 (from any host OS)
 uv-bundler --target etl-x86_64
 
-# Build for linux/aarch64 — Ghost Resolution fetches aarch64 numpy/pandas wheels
+# Build for linux/aarch64 — uv fetches aarch64 numpy/pandas wheels
 uv-bundler --target etl-aarch64
 ```
 

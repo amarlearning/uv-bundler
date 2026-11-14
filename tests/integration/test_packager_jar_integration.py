@@ -25,7 +25,7 @@ def test_jar_packager_integration(tmp_path: Path) -> None:
             names = set(zf.namelist())
             assert "META-INF/MANIFEST.MF" in names
             assert "__main__.py" in names
-            assert "site-packages/pkg/__init__.py" in names
+            assert "pkg/__init__.py" in names  # deps at archive root
             assert "app/main.py" in names
     finally:
         clean_staging(paths)
@@ -47,6 +47,6 @@ def test_jar_slim_mode_no_site_packages(tmp_path: Path) -> None:
         assert "META-INF/MANIFEST.MF" in names
         assert "__main__.py" in names
         assert "app/main.py" in names
-        assert not any(n.startswith("site-packages/") for n in names)
+        assert not any(n.startswith("pkg/") for n in names)
     finally:
         clean_staging(paths)

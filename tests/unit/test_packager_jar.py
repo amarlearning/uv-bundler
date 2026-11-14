@@ -35,7 +35,7 @@ def test_build_jar_writes_structure(tmp_path: Path) -> None:
         names = set(zf.namelist())
         assert "__main__.py" in names
         assert "META-INF/MANIFEST.MF" in names
-        assert "site-packages/dep.txt" in names
+        assert "dep.txt" in names  # deps at archive root
         assert "app/main.py" in names
 
 

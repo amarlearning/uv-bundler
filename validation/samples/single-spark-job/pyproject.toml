@@ -3,9 +3,14 @@ name = "single-spark-job"
 version = "0.1.0"
 description = "Single Spark job example for uv-bundler"
 requires-python = ">=3.10"
+# Runtime deps bundled into the artifact. pyspark itself is provided by the
+# cluster, so it lives in the dev group: available locally, never bundled.
 dependencies = [
-  "pyspark==3.5",
+  "tabulate>=0.9",
 ]
+
+[dependency-groups]
+dev = ["pyspark>=4.0,<5"]
 
 [tool.uv-bundler]
 project_name = "single-spark-job"

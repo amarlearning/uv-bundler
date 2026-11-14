@@ -1,135 +1,166 @@
 # uv-bundler
 
-**Build deployment-ready Python artifacts for Linux — from any machine. No Docker, no Linux build server.**
+[![PyPI](https://img.shields.io/pypi/v/uv-bundler)](https://pypi.org/project/uv-bundler/)
+[![Python](https://img.shields.io/pypi/pyversions/uv-bundler)](https://pypi.org/project/uv-bundler/)
+[![Artifacts validated](https://github.com/amarlearning/uv-bundler/actions/workflows/artifacts.yml/badge.svg)](https://github.com/amarlearning/uv-bundler/actions/workflows/artifacts.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 
-Data pipelines (Spark, Flink, Lambda) run on Linux. Your laptop runs macOS. Getting the right platform wheels into a deployment artifact has always required a dedicated Linux build environment — until now.
+**Build AWS Lambda ZIPs, Spark `--py-files` archives and PEX files for Linux (x86_64 or
+aarch64) from your Mac. No Docker, no Linux build box.**
+
+```bash
+uv tool install uv-bundler
+uv-bundler --target lambda --arch aarch64
+# → dist/my-fn-linux-aarch64.zip   (Linux Graviton wheels, built on macOS)
+```
+
+Your `pyproject.toml` already lists the dependencies. uv-bundler asks [uv](https://docs.astral.sh/uv/)
+for the **target's** wheels (`--python-platform`), not your laptop's, and packs them with
+your code in the layout the target runtime expects.
+
+> Not affiliated with Astral. uv-bundler is a community tool built on top of uv.
 
 ---
 
-## The problem
+## Why
 
-- **You need Linux wheels, but you're on macOS.** A plain `pip install` fetches the wrong binaries for your host machine, not your target.
-- **Switching to ARM (AWS Graviton, Apple Silicon) is painful.** Build pipelines are hard-coded to x86_64 and fail silently on aarch64.
-- **ZIP hacks break in production.** Native extensions (NumPy, Pandas) crash with `ImportError` when bundled without the correct platform wheels.
+`pip install` on a Mac fetches macOS wheels. Zip them up for Lambda or Spark, and the
+first import of NumPy, orjson, pydantic-core or cryptography fails on Linux. The usual
+fixes are a Docker build (`sam build --use-container`, a hand-written Dockerfile) or a
+Linux CI job just for packaging.
 
----
-
-## The solution
-
-`uv-bundler` uses **Ghost Resolution** — `uv pip compile` + `uv pip install --python-platform` — to resolve and download the correct Linux wheels on any host OS. No Docker, no cross-compilation, no remote build environment.
-
-One command produces a self-contained artifact that runs on Linux x86_64 or aarch64:
-
-```bash
-uv-bundler --target spark-prod
-# → dist/my-spark-job-linux-x86_64.jar
-```
-
-Run it on Linux with zero pre-installed packages:
-
-```bash
-python my-spark-job-linux-x86_64.jar
-# Running single Spark job with pyspark 3.5.0
-```
-
-When your runtime environment already has dependencies installed (EMR clusters, Lambda layers, Airflow workers), use **slim mode** to bundle source code only:
-
-```bash
-uv-bundler --target spark-prod --slim
-# → dist/my-spark-job-linux-x86_64-slim.jar
-```
+uv-bundler does it in one command, on any host, in seconds, from config you check in.
 
 ---
 
 ## Quick start
 
-**1. Add a target to `pyproject.toml`:**
+**1. Describe the artifact in `pyproject.toml`:**
 
 ```toml
 [tool.uv-bundler]
-project_name = "my-spark-job"
-default_target = "spark-prod"
+project_name = "my-fn"
+default_target = "lambda"
 
-[tool.uv-bundler.targets.spark-prod]
-format = "jar"
-entry_point = "app.main:run"
+[tool.uv-bundler.targets.lambda]
+format = "zip"
+entry_point = "my_fn.main:run"   # used by `python my-fn.zip`; Lambda calls your handler
 platform = "linux"
-arch = "x86_64"
-python_version = "3.10"
+arch = "x86_64"                  # or override with --arch aarch64
+python_version = "3.12"
 manylinux = "2014"
 ```
 
-**2. Build from any machine:**
+**2. Build:**
 
 ```bash
-# Verify config without building
-uv-bundler --dry-run
-
-# Build the artifact
-uv-bundler --target spark-prod
+uv-bundler                 # → dist/my-fn-linux-x86_64.zip
+uv-bundler --arch aarch64  # → dist/my-fn-linux-aarch64.zip
+uv-bundler --dry-run       # show the resolved config, build nothing
 ```
 
-**3. Validate it works — no packages needed inside the container:**
-
-```bash
-docker run --rm \
-  -v "$(pwd)/dist:/artifacts" \
-  python:3.10-slim \
-  python /artifacts/my-spark-job-linux-x86_64.jar
-# Running single Spark job with pyspark 3.5.0
-```
+**3. Deploy** with the tools you already use (below).
 
 ---
 
-## Cross-arch builds
+## Use it with
 
-Build for a different architecture without any additional tooling:
+### AWS Lambda — `format = "zip"`
+
+Your code and its dependencies sit at the root of the ZIP, which is the layout Lambda imports from.
 
 ```bash
-# Build for ARM from any host (macOS, Linux x86_64, ...)
-uv-bundler --target spark-prod --arch aarch64
-# → dist/my-spark-job-linux-aarch64.jar
+aws lambda update-function-code --function-name my-fn \
+  --zip-file fileb://dist/my-fn-linux-aarch64.zip
+# handler: my_fn.handler.handler   runtime: python3.12   architecture: arm64
 ```
 
-Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directly — the host arch is irrelevant.
+Native dependencies work, because Lambda extracts the ZIP before importing. With SAM or
+CDK, point `CodeUri` / `Code.fromAsset` at the ZIP.
+
+### Spark (EMR, Databricks, spark-on-k8s) — `format = "jar"` or `"zip"`
+
+```bash
+spark-submit --py-files dist/my-job-linux-x86_64.jar driver.py
+```
+
+Driver and executors both import your package and its dependencies from the archive.
+**Keep pyspark out of `[project].dependencies`**: the cluster provides it. Put it in a
+dev group (`[dependency-groups] dev = ["pyspark"]`) so you have it locally but never ship it.
+
+`.jar` is a zip with a JVM-friendly manifest; PySpark accepts `.jar`, `.zip` and `.egg` in
+`--py-files`. Python can't import native extensions (`.so`) from inside a zip on the path,
+so for NumPy and similar dependencies on Spark use a PEX (see PySpark's *Python package
+management* docs).
+
+### Airflow, cron, schedulers, Spark with native deps — `format = "pex"`
+
+```bash
+python dist/my-job-linux-x86_64.pex
+```
+
+A [PEX](https://docs.pex-tool.org/) is a single executable file containing a whole
+environment, native extensions included. Needs `pex` on PATH when you build
+(`uv tool install pex`).
+
+### Slim mode — dependencies already on the target
+
+```bash
+uv-bundler --slim   # → dist/my-job-linux-x86_64-slim.jar, your source only
+```
+
+For EMR clusters with bootstrapped libraries, Lambda Layers, or Airflow workers with a shared
+environment. Slim builds don't resolve anything.
 
 ---
 
 ## How it works
 
-`uv-bundler` follows a 5-step lifecycle:
+1. Reads `[tool.uv-bundler]`, applies CLI overrides, checks that the entry-point module exists.
+2. `uv pip compile --python-platform x86_64-manylinux2014 …` pins versions for the **target**.
+3. `uv pip install --target … --python-platform …` downloads the matching wheels.
+   (PEX targets skip this step, because pex resolves the lockfile itself.)
+4. Assembles the archive: sources and dependencies at the root, plus a `__main__.py` so
+   `python artifact.zip` runs your `entry_point`.
 
-1. **Context hydration** — reads `pyproject.toml`, merges CLI overrides, validates the entry point module path.
-2. **Ghost Resolution** — runs `uv pip compile --python-platform <target>` to pin platform-specific wheel hashes for the *target* OS, not the build host. *(skipped in slim mode)*
-3. **Staging** — runs `uv pip install --target` to extract wheels into a staging directory alongside your source code. *(skipped in slim mode and for PEX, which resolves the lockfile itself)*
-4. **Bootstrap generation** — generates a `__main__.py` that correctly loads `site-packages` at runtime, including when executed directly from inside a zip archive (zipapp mode).
-5. **Assembly** — bundles everything into the requested format. In slim mode, only source code is bundled — no `site-packages/`.
+### Compared with other approaches
+
+| Approach | Docker? | Output | Notes |
+|---|---|---|---|
+| **uv-bundler** | No | ZIP, `--py-files` JAR/ZIP, PEX | One config for all three; macOS and Linux hosts tested in CI |
+| `pex --platform …` | No | PEX only | What uv-bundler uses for PEX. Use it directly if PEX is all you need |
+| `pip download --platform … --only-binary :all:` + a zip script | No | Whatever you script | Same idea; you maintain the script and the layout |
+| `sam build --use-container`, Docker builds | Yes | Lambda | Can compile sdist-only packages, which uv-bundler can't |
+| `venv-pack` / `conda-pack` | Linux build host | Spark archives | Packs an environment that must already exist on Linux |
 
 ---
 
-## Artifact formats
+## Limitations
 
-### JAR — Spark / Flink
+- **Needs wheels for the target.** A dependency that only publishes an sdist with native
+  code can't be compiled for another platform. Pin a version that ships a matching wheel,
+  change `manylinux` / `python_version`, or build that artifact on Linux. Pure-Python
+  sdists are fine.
+- **Native extensions in JAR/ZIP only load where the archive is extracted** (Lambda yes,
+  `--py-files` no). uv-bundler warns when a JAR contains them. Use PEX otherwise.
+- **Resolves from `pyproject.toml`, not `uv.lock`.** Versions are pinned at build time for
+  the target, so they can differ from your local lock.
 
-- Self-contained zipapp, runnable with `python app.jar`
-- Includes `META-INF/MANIFEST.MF` for JVM tooling compatibility
-- Dependencies bundled under `site-packages/` inside the archive
-- Build fails if `.dylib` or `.dll` binaries are detected (Linux targets only)
-- **Slim**: source only — use when pyspark/deps are pre-installed on the cluster
+---
 
-### ZIP — AWS Lambda / general deployment
+## How it's tested
 
-- Same internal layout as JAR (bootstrap + `site-packages/` + sources)
-- Suited for Lambda Layers and generic zip-based deployments
-- **Slim**: source only — use when a Lambda Layer already provides dependencies
+Every push runs [`artifacts.yml`](.github/workflows/artifacts.yml). It builds the
+[sample projects](validation/) on Linux x86_64, Linux aarch64 and macOS (Apple Silicon),
+always targeting a platform other than the build host. Each artifact then runs on native
+hardware **the way production runs it**:
 
-### PEX — Airflow / schedulers
+- the Lambda ZIP is invoked through AWS's own Lambda runtime image,
+- the Spark JAR and ZIP run with `spark-submit --py-files` in the official Spark image, with
+  pyspark *not* bundled,
+- the NumPy/pandas PEX runs in a clean `python:3.10-slim` container.
 
-- Single-file executable Python environment via the `pex` CLI
-- Uses a platform tag (e.g. `manylinux2014_x86_64-cp-310-cp310`) for cross-platform resolution
-- First build downloads packages from PyPI; subsequent builds use the cache
-- Cache `$PEX_ROOT` (default `~/.pex`) in CI to avoid repeated downloads
-- **Slim**: source only — no `-r requirements` passed to pex; use when the runtime environment provides deps
+Run the same checks locally with `make -C validation test-artifacts`.
 
 ---
 
@@ -137,101 +168,73 @@ Ghost Resolution fetches `manylinux2014_aarch64` wheels and bundles them directl
 
 ```toml
 [tool.uv-bundler]
-project_name = "analytics-engine"    # Used in artifact filename
-default_target = "spark-prod"         # Target used when --target is omitted
-output_base = "./dist"                # Output directory (override via OUT_DIR env var)
+project_name = "analytics-engine"    # artifact filename prefix
+default_target = "spark-prod"         # used when --target is omitted
+output_base = "./dist"                # output directory (OUT_DIR env var wins)
 
 [tool.uv-bundler.targets.spark-prod]
-# Core
-format = "jar"                        # "jar" | "pex" | "zip"
+format = "jar"                        # "jar" | "zip" | "pex"
 entry_point = "app.main:run"          # module.submodule:function
 
-# Resolution (cross-platform)
 platform = "linux"                    # "linux" | "macos" | "windows"
 arch = "x86_64"                       # "x86_64" | "aarch64"
-python_version = "3.10"
-manylinux = "2014"                    # "2010" | "2014" | numeric (e.g. "31")
+python_version = "3.10"               # default 3.10
+manylinux = "2014"                    # "2010" | "2014" | glibc minor, e.g. "31"
 
-# Packaging
-compression = "deflated"              # "stored" | "deflated"
+compression = "deflated"              # "deflated" | "stored"
+exclude = ["tests/*", "*.pyc"]        # glob patterns, relative to the project root
+extra_files = { "config/prod.yaml" = "resources/config.yaml" }  # source → path in archive
 
-# Slim mode — bundle source only, no dependencies
-slim = false                          # true = skip resolve+install, source only
-slim_exclude = ["tests/**", "*.pyi"] # additional patterns excluded from source in slim mode
-
-# Advanced
-exclude = ["tests/*", "**/__pycache__", "*.pyc", ".git*"]
-extra_files = { "config/prod.yaml" = "resources/config.yaml" }
+slim = false                          # true = source only, no dependencies
+slim_exclude = ["tests/**", "*.pyi"]  # extra excludes applied only to slim builds
 ```
 
-> **`OUT_DIR`** environment variable overrides `output_base` and takes precedence over the TOML value.
-
----
+Artifacts are named `<project_name>-<platform>-<arch>[-slim].<format>`.
 
 ## CLI reference
 
 ```
 uv-bundler [OPTIONS]
 
-Options:
-  --target TEXT           Target name from [tool.uv-bundler.targets.*]
-  --platform TEXT         Override platform  (linux | macos | windows)
-  --arch TEXT             Override arch      (x86_64 | aarch64)
-  --python-version TEXT   Override Python version (e.g. 3.10)
-  --manylinux TEXT        Override manylinux tag  (e.g. 2014)
-  --slim                  Bundle source only — skip dependency resolution and installation
-  --dry-run               Print resolved config without building
-  -p, --project PATH      Project directory containing pyproject.toml  (default: .)
+  -t, --target TEXT       Target name from [tool.uv-bundler.targets.*]
+  -p, --project PATH      Project directory containing pyproject.toml (default: .)
+  --arch TEXT             Override arch            (x86_64 | aarch64)
+  --platform TEXT         Override platform        (linux | macos | windows)
+  --python-version TEXT   Override Python version  (e.g. 3.12)
+  --manylinux TEXT        Override manylinux tag   (e.g. 2014, 28)
+  --slim                  Bundle source only
+  --dry-run               Print the resolved config without building
 ```
-
-`--slim` overrides `slim = false` in config. Slim artifacts are named with a `-slim` infix: `my-job-linux-x86_64-slim.jar`.
 
 ---
 
 ## Troubleshooting
 
-**"failed to resolve/install dependencies" mentioning a source build.** Ghost Resolution needs a pre-built wheel for the *target* platform. A package that ships only an sdist with native code can't be compiled for another OS/arch. Pin a version that publishes a matching wheel (e.g. `manylinux2014_aarch64`), adjust `manylinux` / `python_version` to one it supports, or build that artifact on the target platform.
+**"failed to resolve/install dependencies" mentioning a source build.** A dependency has no
+wheel for the target. See [Limitations](#limitations).
 
-**"'uv' not found on PATH" / "'pex' not found on PATH".** Install the tool: `brew install uv`, `uv tool install pex`.
+**"'uv' not found on PATH" / "'pex' not found on PATH".** `brew install uv` (or see
+[uv's install docs](https://docs.astral.sh/uv/getting-started/installation/)), and
+`uv tool install pex` for PEX targets.
+
+**`ImportError` for a native module when running a JAR/ZIP in place.** Python can't load
+`.so` files from inside a zip. Use `format = "pex"`, or deploy somewhere that extracts the
+archive, as Lambda does.
 
 ---
 
-## Installation
+## Development
 
 ```bash
-pip install uv-bundler
-# or
-uv tool install uv-bundler   # installs uv-bundler as an isolated global CLI
+git clone https://github.com/amarlearning/uv-bundler.git && cd uv-bundler
+make setup                                   # .venv with dev deps (needs uv)
+make fmt && make lint && make type && make test
+make -C validation test-artifacts            # real-runtime checks (needs Docker + pex)
 ```
 
----
-
-## Installation (development)
-
-```bash
-git clone https://github.com/amarlearning/uv-bundler.git
-cd uv-bundler
-
-# Install uv — https://docs.astral.sh/uv/
-brew install uv   # macOS
-
-make setup        # creates .venv and installs all dev deps
-
-make fmt          # format
-make lint         # ruff + mypy
-make test         # unit + integration tests
-```
-
----
-
-## Contributing
-
-- Branch: `feature/<desc>` or `fix/<desc>`
-- Commit: imperative mood, ≤ 50 chars summary
-- Quality gate: `make fmt && make lint && make type && make test`
-- PR: include rationale; update docs if behavior changes
-
----
+Branches `feature/<desc>` / `fix/<desc>`, imperative commit subjects of 50 characters or
+fewer, and docs updated whenever behavior changes. See [AGENTS.md](AGENTS.md) for the
+architecture.
 
 ## License
 

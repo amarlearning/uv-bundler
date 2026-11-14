@@ -46,6 +46,26 @@ def _write_extra_files(zf: ZipFile, project_root: Path | None, extra_files: dict
             zf.write(src, arc_dest)
 
 
+def _write_payload(zf: ZipFile, paths: StagingPaths) -> None:
+    """Write sources and dependencies side by side at the archive root.
+
+    A flat layout is what every runtime expects: Lambda imports the handler with
+    only the archive root on ``sys.path``, and ``spark-submit --py-files`` does the
+    same.  ``python app.zip`` works too, since Python puts the archive on sys.path.
+    """
+    written: set[str] = set()
+    for fpath, arc in _iter_files(paths.sources):
+        zf.write(fpath, arc.as_posix())
+        written.add(arc.as_posix())
+    for fpath, arc in _iter_files(paths.site_packages):
+        if arc.parts[0] == "bin":
+            continue  # console scripts with build-host shebangs; useless in the artifact
+        name = arc.as_posix()
+        if name in written:
+            raise ValueError(f"Source file {name!r} collides with a dependency of the same path")
+        zf.write(fpath, name)
+
+
 def _ensure_no_incompatible_binaries(paths: StagingPaths, target: TargetConfig) -> None:
     if (target.platform or "").lower() != "linux":
         return
@@ -81,10 +101,7 @@ def build_jar(
     with ZipFile(output, mode="w", compression=compression) as zf:
         _write_manifest(zf)
         zf.writestr("__main__.py", render_bootstrap(entry_point))
-        for fpath, arc in _iter_files(paths.site_packages):
-            zf.write(fpath, f"site-packages/{arc.as_posix()}")
-        for fpath, arc in _iter_files(paths.sources):
-            zf.write(fpath, arc.as_posix())
+        _write_payload(zf, paths)
         _write_extra_files(zf, project_root, target.extra_files)
     return PackageResult(output=output)
 
@@ -101,10 +118,7 @@ def build_zip(
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, mode="w", compression=compression) as zf:
         zf.writestr("__main__.py", render_bootstrap(entry_point))
-        for fpath, arc in _iter_files(paths.site_packages):
-            zf.write(fpath, f"site-packages/{arc.as_posix()}")
-        for fpath, arc in _iter_files(paths.sources):
-            zf.write(fpath, arc.as_posix())
+        _write_payload(zf, paths)
         _write_extra_files(zf, project_root, target.extra_files)
     return PackageResult(output=output)
 

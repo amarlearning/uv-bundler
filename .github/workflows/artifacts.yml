@@ -40,10 +40,10 @@ jobs:
   #   macos-latest      (Apple Silicon host) → builds for linux/x86_64 + linux/aarch64
   #
   # Samples and formats:
-  #   single-spark-job  JAR + ZIP + PEX              pyspark (pure Python) — fat
+  #   single-spark-job  JAR + ZIP + PEX              tabulate bundled; pyspark provided by the cluster
   #   single-spark-job  JAR + ZIP + PEX (slim)       source only, no deps bundled
   #   numpy-etl         PEX                           numpy + pandas (C extensions — PEX extracts .so to disk)
-  #   lambda-zip        ZIP                           boto3 (pure Python, Lambda deployment format)
+  #   lambda-zip        ZIP                           orjson (native, not in the Lambda runtime)
   #
   build-linux:
     name: Build linux/${{ matrix.target-arch }} on ${{ matrix.host }}/${{ matrix.runner-arch }}
@@ -126,7 +126,7 @@ jobs:
         run: |
           uv-bundler --target etl-${{ matrix.target-arch }}
 
-      # ── lambda-zip (ZIP — pure Python boto3, Lambda deployment format) ────
+      # ── lambda-zip (ZIP — Lambda deployment package, native orjson dep) ───
       - name: Build lambda-zip for linux/${{ matrix.target-arch }}
         working-directory: validation/samples/lambda-zip
         env:
@@ -148,11 +148,10 @@ jobs:
   # ── Runtime validation ────────────────────────────────────────────────────
   #
   # Each artifact set (from every build host) is validated on the NATIVE runner
-  # for its arch, inside python:3.10-slim Docker — the exact target environment.
-  #
-  # Separate steps per format and sample so failures are immediately visible.
-  # No packages are pre-installed: fat artifacts must be fully self-contained.
-  # Slim artifacts are validated for structure only (deps not bundled).
+  # for its arch, run the way production runs it: spark-submit --py-files for
+  # the Spark JAR/ZIP, AWS's Lambda runtime image for the Lambda ZIP, and a
+  # clean python:3.10-slim container for the PEX. Slim artifacts and the Spark
+  # PEX are validated for structure only.
   #
   validate-linux:
     name: Validate linux/${{ matrix.target-arch }} (built on ${{ matrix.host }})
@@ -174,11 +173,6 @@ jobs:
             target-arch: aarch64
             host: macos
     runs-on: ${{ matrix.runner }}
-    env:
-      SPARK_STEM: single-spark-job-linux-${{ matrix.target-arch }}
-      ETL_STEM: numpy-etl-linux-${{ matrix.target-arch }}
-      LAMBDA_STEM: lambda-zip-linux-${{ matrix.target-arch }}
-      IMAGE: python:3.10-slim
     steps:
       - uses: actions/checkout@v6
 
@@ -188,49 +182,25 @@ jobs:
           name: artifacts-${{ matrix.host }}-host-linux-${{ matrix.target-arch }}
           path: artifacts
 
-      # ── single-spark-job fat ──────────────────────────────────────────────
-      - name: Run single-spark-job JAR in linux/${{ matrix.target-arch }} container
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}/artifacts:/artifacts" \
-            "$IMAGE" \
-            sh -c "python /artifacts/$SPARK_STEM.jar | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+      # Each artifact is run the way its real runtime runs it — see
+      # validation/run_artifacts.sh (also used locally via `make -C validation test-artifacts`).
 
-      - name: Run single-spark-job ZIP in linux/${{ matrix.target-arch }} container
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}/artifacts:/artifacts" \
-            "$IMAGE" \
-            sh -c "python /artifacts/$SPARK_STEM.zip | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
+      # ── single-spark-job: spark-submit --py-files, pyspark NOT bundled ────
+      - name: spark-submit single-spark-job JAR + ZIP on linux/${{ matrix.target-arch }}
+        run: validation/run_artifacts.sh spark artifacts ${{ matrix.target-arch }}
 
-      - name: Run single-spark-job PEX in linux/${{ matrix.target-arch }} container
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}/artifacts:/artifacts" \
-            "$IMAGE" \
-            sh -c "python /artifacts/$SPARK_STEM.pex | tee /dev/stderr | grep -q 'Running single Spark job with pyspark'"
-
-      # ── single-spark-job slim (structure only — deps not bundled) ─────────
-      - name: Validate slim artifact structure for linux/${{ matrix.target-arch }}
+      # ── single-spark-job slim + PEX (structure only) ──────────────────────
+      - name: Validate artifact structure for linux/${{ matrix.target-arch }}
         run: |
           python validation/validate_artifacts.py \
             --out-dir artifacts \
             --target-os linux \
-            --target-arch ${{ matrix.target-arch }} \
-            --skip-runtime
+            --target-arch ${{ matrix.target-arch }}
 
       # ── numpy-etl (native numpy/pandas C extensions via PEX) ─────────────
-      - name: Run numpy-etl PEX in linux/${{ matrix.target-arch }} container
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}/artifacts:/artifacts" \
-            "$IMAGE" \
-            sh -c "python /artifacts/$ETL_STEM.pex | tee /dev/stderr | grep -q 'ETL complete'"
+      - name: Run numpy-etl PEX on linux/${{ matrix.target-arch }}
+        run: validation/run_artifacts.sh numpy artifacts ${{ matrix.target-arch }}
 
-      # ── lambda-zip (pure Python boto3 in ZIP format) ──────────────────────
-      - name: Run lambda-zip ZIP in linux/${{ matrix.target-arch }} container
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}/artifacts:/artifacts" \
-            "$IMAGE" \
-            sh -c "python /artifacts/$LAMBDA_STEM.zip | tee /dev/stderr | grep -q 'lambda ok'"
+      # ── lambda-zip: invoke the handler in AWS's Lambda runtime image ──────
+      - name: Invoke lambda-zip handler in the Lambda runtime on linux/${{ matrix.target-arch }}
+        run: validation/run_artifacts.sh lambda artifacts ${{ matrix.target-arch }}

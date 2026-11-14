@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
@@ -33,7 +35,7 @@ def test_build_zip_writes_structure(tmp_path: Path) -> None:
     with ZipFile(out) as zf:
         names = set(zf.namelist())
         assert "__main__.py" in names
-        assert "site-packages/dep.txt" in names
+        assert "dep.txt" in names  # deps at archive root
         assert "app/main.py" in names
         # ZIP has no MANIFEST.MF (unlike JAR)
         assert "META-INF/MANIFEST.MF" not in names
@@ -113,3 +115,41 @@ def test_build_zip_allows_so_files(tmp_path: Path) -> None:
     (paths.site_packages / "_core.so").write_text("bin")
     target = TargetConfig(platform="linux", arch="x86_64")
     assert build_zip(paths, "app.main:run", target, tmp_path / "out.zip").output.exists()
+
+
+def test_build_zip_runs_with_deps_at_root(tmp_path: Path) -> None:
+    """`python app.zip` and Lambda-style imports both see deps at the archive root."""
+    paths = make_staging(tmp_path)
+    (paths.sources / "app" / "__init__.py").write_text("")
+    (paths.site_packages / "greet").mkdir()
+    (paths.site_packages / "greet" / "__init__.py").write_text("WORD = 'hi'\n")
+    (paths.site_packages / "bin").mkdir()
+    (paths.site_packages / "bin" / "greet-cli").write_text("#!/host/python\n")
+    (paths.sources / "app" / "main.py").write_text(
+        "import greet\n\ndef run():\n    print(greet.WORD)\n    return 0\n"
+    )
+    out = tmp_path / "out.zip"
+    build_zip(paths, "app.main:run", TargetConfig(), out)
+    run = subprocess.run(  # noqa: S603 - runs the artifact this test just built
+        [sys.executable, str(out)], capture_output=True, text=True, check=True
+    )
+    assert run.stdout.strip() == "hi"
+    # Lambda / --py-files style: only the archive root on sys.path, no __main__.
+    handler_import = "import sys; sys.path.insert(0, sys.argv[1]); import app.main; app.main.run()"
+    run = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", handler_import, str(out)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert run.stdout.strip() == "hi"
+    with ZipFile(out) as zf:
+        assert "bin/greet-cli" not in zf.namelist()
+
+
+def test_build_zip_rejects_source_dependency_collision(tmp_path: Path) -> None:
+    paths = make_staging(tmp_path)
+    (paths.site_packages / "app").mkdir()
+    (paths.site_packages / "app" / "main.py").write_text("")
+    with pytest.raises(ValueError, match="collides"):
+        build_zip(paths, "app.main:run", TargetConfig(), tmp_path / "out.zip")

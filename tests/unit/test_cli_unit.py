@@ -434,7 +434,7 @@ def test_cli_slim_builds_jar_with_slim_suffix(
 
 
 def test_cli_slim_jar_has_no_site_packages(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Slim JAR must not contain any site-packages/ entries."""
+    """Slim JAR must not contain any installed dependencies."""
     _write_minimal_project(tmp_path)
     monkeypatch.chdir(tmp_path)
     _mock_uv_success(monkeypatch)
@@ -443,7 +443,7 @@ def test_cli_slim_jar_has_no_site_packages(tmp_path: Path, monkeypatch: pytest.M
     jar = next((tmp_path / "dist").glob("*-slim.jar"))
     with ZipFile(jar) as zf:
         names = zf.namelist()
-    assert not any(n.startswith("site-packages/") for n in names)
+    assert not any(".dist-info/" in n for n in names)
     assert "app/main.py" in names
 
 

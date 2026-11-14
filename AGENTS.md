@@ -6,7 +6,7 @@
 
 ## What this project does
 
-**uv-bundler** builds deployment-ready Python artifacts (JAR, ZIP, PEX) for Linux targets from any host OS (macOS, Windows, Linux). It solves the cross-platform wheel problem by using **Ghost Resolution**: `uv pip compile` + `uv pip install --python-platform` fetches the correct Linux wheels without Docker or a Linux build server.
+**uv-bundler** builds deployment-ready Python artifacts (JAR, ZIP, PEX) for Linux targets from any host OS (macOS, Windows, Linux). It solves the cross-platform wheel problem with uv's `--python-platform` (`uv pip compile` + `uv pip install`), which fetches the correct Linux wheels without Docker or a Linux build server. (Older docs call this "Ghost Resolution".)
 
 **Core use cases:**
 - Spark / Flink jobs packaged as fat JARs with bundled `manylinux` wheels
@@ -29,7 +29,7 @@ src/uv_bundler/
 │   ├── resolver.py       # uv pip compile + install command builders
 │   ├── staging.py        # StagingPaths dataclass
 │   ├── packager.py       # Archive builders: JAR, ZIP, PEX
-│   └── bootstrap.py      # __main__.py code generation (sys.path setup)
+│   └── bootstrap.py      # __main__.py code generation (calls the entry point)
 └── adapters/
     ├── fs.py             # Filesystem helpers (create/clean staging dir)
     └── process.py        # Subprocess runner (Runner protocol)
@@ -69,10 +69,10 @@ All four must pass before a PR: `make fmt && make lint && make type && make test
 Understanding this helps when touching any part of the code:
 
 1. **Context hydration** — `config_loader.py` reads `[tool.uv-bundler]` from `pyproject.toml`, resolves the target, merges CLI overrides
-2. **Ghost Resolution** — `resolver.py` runs `uv pip compile --python-platform <target>` to produce a lockfile for the *target* OS, not the build host. **Skipped in slim mode.**
+2. **Cross-platform resolution** — `resolver.py` runs `uv pip compile --python-platform <target>` to produce a lockfile for the *target* OS, not the build host. **Skipped in slim mode.**
 3. **Staging** — `resolver.py` runs `uv pip install --target` to extract wheels into `.uv-bundler/staging/site-packages/`. **Skipped in slim mode and for PEX** (pex resolves the lockfile itself).
-4. **Bootstrap generation** — `bootstrap.py` renders a `__main__.py` that sets up `sys.path` correctly both inside a zip archive and when extracted
-5. **Assembly** — `packager.py` builds JAR/ZIP/PEX from staged sources + site-packages
+4. **Bootstrap generation** — `bootstrap.py` renders a `__main__.py` so `python artifact.zip` calls the entry point
+5. **Assembly** — `packager.py` builds JAR/ZIP/PEX. JAR/ZIP use a **flat layout**: sources and installed deps side by side at the archive root (`_write_payload`). That is what Lambda (imports the handler, root on `sys.path`) and `spark-submit --py-files` need — never nest deps under a subfolder.
 
 ---
 
@@ -115,7 +115,7 @@ PEX is the only format that handles C extensions safely from inside a zip (it ex
 
 ## Slim mode
 
-`--slim` / `slim = true` skips Ghost Resolution and staging entirely. Source files only are bundled. Artifact names gain a `-slim` infix: `my-job-linux-x86_64-slim.jar`. Use when the runtime already provides dependencies (EMR, Lambda Layer, Airflow DAG environment).
+`--slim` / `slim = true` skips resolution and staging entirely. Source files only are bundled. Artifact names gain a `-slim` infix: `my-job-linux-x86_64-slim.jar`. Use when the runtime already provides dependencies (EMR, Lambda Layer, Airflow DAG environment).
 
 `slim_exclude` patterns stack on top of `exclude` — only applied during slim builds.
 
@@ -152,6 +152,8 @@ CLI flags (`--arch`, `--platform`, `--python-version`, `--manylinux`, `--slim`) 
 **Unit tests** (`tests/unit/`) mock all subprocess calls via fake `Runner` — fast, no external tools needed.
 
 **Integration tests** (`tests/integration/`) perform real builds — require `uv` (and `pex` for PEX tests) on PATH. These run on Ubuntu only in CI.
+
+**Runtime validation** (`validation/run_artifacts.sh`, `make -C validation test-artifacts`) runs the sample artifacts in their real runtimes: `spark-submit --py-files`, AWS's Lambda runtime image, and a clean container for PEX. Any change to archive layout or bootstrap must pass it.
 
 **Benchmarks** (`tests/benchmarks/`) only run on `push` to `main`, not on PRs.
 
@@ -213,5 +215,5 @@ These must be on PATH at build time — they are not listed as Python dependenci
 
 | Tool | Purpose | Required for |
 |------|---------|-------------|
-| `uv` | Ghost Resolution (compile + install) | All normal (non-slim) builds |
+| `uv` | Cross-platform resolution (compile + install) | All normal (non-slim) builds |
 | `pex` | PEX assembly | PEX format only |

@@ -14,25 +14,10 @@ def test_render_bootstrap_multi_level_module() -> None:
     assert "getattr(mod, 'execute')" in content
 
 
-def test_render_bootstrap_zipapp_detection() -> None:
-    """Bootstrap must use sys.path[0].is_file() to detect zipapp mode, not __file__."""
-    content = render_bootstrap("app.main:run")
-    assert "sys.path[0]" in content
-    assert "is_file()" in content
-    # Should NOT use Path(__file__).parent.exists() as the primary detection
-    # (that only works in extracted mode, not inside a zip archive)
-    assert "site-packages" in content
-
-
 def test_render_bootstrap_is_valid_python() -> None:
     content = render_bootstrap("app.main:run")
     # Must compile without errors
     compile(content, "<bootstrap>", "exec")
-
-
-def test_render_bootstrap_sys_path_insertion() -> None:
-    content = render_bootstrap("app.main:run")
-    assert "sys.path.insert(0," in content
 
 
 def test_render_bootstrap_returns_int_or_zero() -> None:

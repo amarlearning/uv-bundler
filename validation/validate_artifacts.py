@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -37,8 +36,6 @@ EXPECTED_SLIM_ZIP_PATHS = {
     "app/main.py",
     "app/__init__.py",
 }
-
-EXPECTED_LOG_SUBSTRING = "Running single Spark job with pyspark"
 
 
 def load_members(path: Path) -> set[str]:
@@ -83,7 +80,7 @@ def validate_contents(base: Path, target_os: str, target_arch: str) -> list[str]
 
 
 def validate_slim_contents(base: Path, target_os: str, target_arch: str) -> list[str]:
-    """Validate slim artifacts: must contain sources but no site-packages/ entries."""
+    """Validate slim artifacts: must contain sources but no installed dependencies."""
     errors: list[str] = []
     stem = f"single-spark-job-{target_os}-{target_arch}-slim"
     jar = base / f"{stem}.jar"
@@ -95,61 +92,19 @@ def validate_slim_contents(base: Path, target_os: str, target_arch: str) -> list
     else:
         members = load_members(jar)
         errors.extend(require_paths(members, EXPECTED_SLIM_JAR_PATHS, "slim-jar"))
-        if any(m.startswith("site-packages/") for m in members):
-            errors.append("slim-jar: must not contain site-packages/ (slim mode)")
+        if any(".dist-info/" in m for m in members):
+            errors.append("slim-jar: must not contain installed dependencies (slim mode)")
 
     if not zip_app.exists():
         errors.append(f"slim contents: missing slim ZIP {zip_app}")
     else:
         members = load_members(zip_app)
         errors.extend(require_paths(members, EXPECTED_SLIM_ZIP_PATHS, "slim-zip"))
-        if any(m.startswith("site-packages/") for m in members):
-            errors.append("slim-zip: must not contain site-packages/ (slim mode)")
+        if any(".dist-info/" in m for m in members):
+            errors.append("slim-zip: must not contain installed dependencies (slim mode)")
 
     if not pex.exists():
         errors.append(f"slim contents: missing slim PEX {pex}")
-
-    return errors
-
-
-def run_command(cmd: list[str], cwd: Path | None = None) -> tuple[int, str, str]:
-    proc = subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd is not None else None,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    return proc.returncode, proc.stdout, proc.stderr
-
-
-def validate_runtime(base: Path, target_os: str, target_arch: str) -> list[str]:
-    errors: list[str] = []
-    stem = f"single-spark-job-{target_os}-{target_arch}"
-    jar = base / f"{stem}.jar"
-    pex = base / f"{stem}.pex"
-    zip_app = base / f"{stem}.zip"
-
-    if jar.exists():
-        code, out, err = run_command(["python", str(jar)])
-        if code != 0:
-            errors.append(f"runtime: jar exited with {code}: {err or out}")
-        elif EXPECTED_LOG_SUBSTRING not in out:
-            errors.append("runtime: jar output did not contain expected log line")
-
-    if pex.exists():
-        code, out, err = run_command(["python", str(pex)])
-        if code != 0:
-            errors.append(f"runtime: pex exited with {code}: {err or out}")
-        elif EXPECTED_LOG_SUBSTRING not in out:
-            errors.append("runtime: pex output did not contain expected log line")
-
-    if zip_app.exists():
-        code, out, err = run_command(["python", str(zip_app)])
-        if code != 0:
-            errors.append(f"runtime: zip exited with {code}: {err or out}")
-        elif EXPECTED_LOG_SUBSTRING not in out:
-            errors.append("runtime: zip output did not contain expected log line")
 
     return errors
 
@@ -169,12 +124,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=False,
         help="Skip slim artifact validation",
     )
-    parser.add_argument(
-        "--skip-runtime",
-        action="store_true",
-        default=False,
-        help="Skip runtime execution checks (content validation only)",
-    )
     return parser.parse_args(argv)
 
 
@@ -186,9 +135,6 @@ def main(argv: list[str] | None = None) -> int:
 
     errors: list[str] = []
     errors.extend(validate_contents(base, target_os, target_arch))
-
-    if not ns.skip_runtime:
-        errors.extend(validate_runtime(base, target_os, target_arch))
 
     if not ns.skip_slim:
         errors.extend(validate_slim_contents(base, target_os, target_arch))

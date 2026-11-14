@@ -1,31 +1,23 @@
-# Validate artifacts built by uv-bundler by running them inside a Docker container.
-# Set TARGET_ARCH=aarch64 to validate ARM artifacts (requires aarch64 host or emulation).
+# Build the sample artifacts and run them the way their real runtimes do
+# (spark-submit, a clean python container, the AWS Lambda runtime image).
+# Needs uv, pex and a running Docker. Non-native TARGET_ARCH runs under emulation.
 #
 # Usage:
-#   make test-artifacts TARGET_ARCH=x86_64   (default)
+#   make test-artifacts                      # linux/x86_64
 #   make test-artifacts TARGET_ARCH=aarch64
 
-TARGET_OS   ?= linux
 TARGET_ARCH ?= x86_64
-IMAGE       := python:3.10-slim
+OUT         := $(abspath out)
+BUNDLER     ?= uv-bundler
 
-SPARK_STEM  := single-spark-job-$(TARGET_OS)-$(TARGET_ARCH)
-ETL_STEM    := numpy-etl-$(TARGET_OS)-$(TARGET_ARCH)
-LAMBDA_STEM := lambda-zip-$(TARGET_OS)-$(TARGET_ARCH)
+.PHONY: build-artifacts
+build-artifacts:
+	mkdir -p $(OUT)
+	cd samples/single-spark-job && OUT_DIR=$(OUT) $(BUNDLER) -t spark-jar --arch $(TARGET_ARCH)
+	cd samples/single-spark-job && OUT_DIR=$(OUT) $(BUNDLER) -t spark-zip --arch $(TARGET_ARCH)
+	cd samples/numpy-etl && OUT_DIR=$(OUT) $(BUNDLER) -t etl-$(TARGET_ARCH)
+	cd samples/lambda-zip && OUT_DIR=$(OUT) $(BUNDLER) -t lambda-$(TARGET_ARCH)
 
 .PHONY: test-artifacts
-test-artifacts:
-	@echo "==> Validating single-spark-job (JAR/ZIP/PEX)"
-	docker run --rm -v "$$(pwd)/out/single-spark-job:/artifacts" "$(IMAGE)" \
-	  sh -c "python /artifacts/$(SPARK_STEM).jar | grep -q 'Running single Spark job with pyspark'"
-	docker run --rm -v "$$(pwd)/out/single-spark-job:/artifacts" "$(IMAGE)" \
-	  sh -c "python /artifacts/$(SPARK_STEM).zip | grep -q 'Running single Spark job with pyspark'"
-	docker run --rm -v "$$(pwd)/out/single-spark-job:/artifacts" "$(IMAGE)" \
-	  sh -c "python /artifacts/$(SPARK_STEM).pex | grep -q 'Running single Spark job with pyspark'"
-	@echo "==> Validating numpy-etl (PEX)"
-	docker run --rm -v "$$(pwd)/out/numpy-etl:/artifacts" "$(IMAGE)" \
-	  sh -c "python /artifacts/$(ETL_STEM).pex | grep -q 'ETL complete'"
-	@echo "==> Validating lambda-zip (ZIP)"
-	docker run --rm -v "$$(pwd)/out/lambda-zip:/artifacts" "$(IMAGE)" \
-	  sh -c "python /artifacts/$(LAMBDA_STEM).zip | grep -q 'lambda ok'"
-	@echo "==> All samples validated ok for $(TARGET_OS)/$(TARGET_ARCH)"
+test-artifacts: build-artifacts
+	./run_artifacts.sh all $(OUT) $(TARGET_ARCH)
